@@ -1,7 +1,7 @@
 # Implementation tracker
 
 **Updated:** September 26, 2026  
-**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `d06a780` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
+**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `0da4950` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
 
 **Provider status:** Sendblue phone proof worked in the earlier development test. OpenAI synthetic receipt extraction passed earlier live checks. Natural sandbox and consumer-P2P acceptance remain pending. The free hosted preview disables receipt processing and messaging, retaining Sendblue Verify for signup.
 
@@ -15,7 +15,9 @@ Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented
 
 - Corrected the landing wrapper from an unstyled class to the existing page layout, restoring bounded content width, outer gutters and footer placement. Fixed narrow-screen grid sizing and centered helper copy; aligned entry-page headers and tightened signup form spacing. The brand flower now has explicit sizing inside the signup card.
 - Hidden the Messages sidebar/profile navigation and message deep-link handling when server messaging configuration is unavailable. Receipt/demo links retain their existing capability gates. Remaining reachable real-account links and buttons were audited; no placeholder links were found.
-- Local browser checks at 320, 390, 768 and 1280 CSS pixels found no horizontal overflow. Signup/recovery/Back navigation works without sending a phone proof. Formatting, all-workspace TypeScript and the production build passed. Authenticated navigation was checked in source; a real-device signup/passkey remains unverified. Deployment verification follows in the release record.
+- Local browser checks at 320, 390, 768 and 1280 CSS pixels found no horizontal overflow. Signup/recovery/Back navigation works without sending a phone proof. Formatting, all-workspace TypeScript and the production build passed. Authenticated navigation was checked in source; a real-device signup/passkey remains unverified. Render deployed `0da4950` successfully in 1m44s; [GitHub CI](https://github.com/kavin1001/tallie/actions/runs/36224784242) passed. Live readiness returned 200; final public layout inspection is recorded in the deployment guide.
+
+### Initial deployment
 
 - Published the private repository and deployed [Render Blueprint tallie-preview](https://dashboard.render.com/blueprint/exs-darm5ad9fdbs73a5qka0). Free web is Live, PostgreSQL is Available, Blueprint Auto Sync and service auto-deploy are off. The actual Docker deployment passed in 2m07s.
 - Added preview startup migrations and bounded proof maintenance; receipt, messaging and simulator gates fail closed. Removed the free-plan-incompatible shutdown override after Render's planner rejected it. The paid four-role alternative stays in `deploy/render-paid.yaml`.
