@@ -46,6 +46,7 @@ export function AccountHome({
   onSignOut,
   onSecurity,
   onMessages,
+  messagingAvailable = false,
   initialExpenseId,
   initialReceiptId,
   initialMessageDraft,
@@ -54,6 +55,7 @@ export function AccountHome({
   onSignOut: () => void | Promise<void>;
   onSecurity: () => void;
   onMessages: () => void;
+  messagingAvailable?: boolean;
   initialExpenseId?: string;
   initialReceiptId?: string;
   initialMessageDraft?: MessageDraft;
@@ -214,14 +216,16 @@ export function AccountHome({
             </button>
           ))}
         </nav>
-        <button className="account-message-card" onClick={onMessages}>
-          <MessageCircle size={23} />
-          <strong>A friend in Messages.</strong>
-          <span>Make room for the good stuff.</span>
-          <b>
-            Connect Tallie <ArrowUpRight size={15} />
-          </b>
-        </button>
+        {messagingAvailable && (
+          <button className="account-message-card" onClick={onMessages}>
+            <MessageCircle size={23} />
+            <strong>A friend in Messages.</strong>
+            <span>Make room for the good stuff.</span>
+            <b>
+              Connect Tallie <ArrowUpRight size={15} />
+            </b>
+          </button>
+        )}
         <button className="account-profile" onClick={() => setProfileOpen(true)}>
           <Avatar name={account.name} />
           <span>
@@ -618,18 +622,20 @@ export function AccountHome({
             </span>
             <ChevronRight size={17} />
           </button>
-          <button
-            onClick={() => {
-              setProfileOpen(false);
-              onMessages();
-            }}
-          >
-            <MessageCircle size={19} />
-            <span>
-              Tallie in Messages<small>Your assistant, one conversation away.</small>
-            </span>
-            <ChevronRight size={17} />
-          </button>
+          {messagingAvailable && (
+            <button
+              onClick={() => {
+                setProfileOpen(false);
+                onMessages();
+              }}
+            >
+              <MessageCircle size={19} />
+              <span>
+                Tallie in Messages<small>Your assistant, one conversation away.</small>
+              </span>
+              <ChevronRight size={17} />
+            </button>
+          )}
         </div>
         <Button variant="ghost" fullWidth loading={signingOut} onClick={() => void signOut()}>
           Sign out

@@ -1403,11 +1403,27 @@ em {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 116px;
+  min-height: 96px;
+  flex-shrink: 0;
+  gap: 20px;
+}
+.welcome-beta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.welcome-beta > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #849668;
 }
 .welcome-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   flex: 1;
   gap: 25px;
@@ -1453,6 +1469,7 @@ em {
   margin-top: 17px;
   font-size: 10px;
   color: #7c8576;
+  line-height: 1.7;
 }
 .welcome-footer {
   display: flex;
@@ -3050,10 +3067,10 @@ em {
     padding: 0 25px;
   }
   .welcome-header {
-    height: 87px;
+    min-height: 80px;
   }
   .welcome-main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 20px 0 0;
     text-align: center;
     gap: 0;
@@ -3064,7 +3081,7 @@ em {
     font-size: 8px;
   }
   .welcome-copy h1 {
-    font-size: 77px;
+    font-size: clamp(60px, 16vw, 77px);
     margin: 23px 0 21px;
   }
   .welcome-copy > p:not(.form-error) {

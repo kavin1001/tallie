@@ -111,9 +111,12 @@
   gap: 10px;
   text-align: left;
   background: transparent;
-  margin-top: 25px;
+  margin-top: auto;
   padding: 13px 3px 0;
   border-top: 1px solid var(--line);
+}
+.account-message-card + .account-profile {
+  margin-top: 24px;
 }
 .account-profile > span:nth-child(2) {
   min-width: 0;

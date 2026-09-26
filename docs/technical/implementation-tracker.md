@@ -11,6 +11,12 @@ Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented
 
 ## September 26 hosted free-preview milestone
 
+### Frontend refinement
+
+- Corrected the landing wrapper from an unstyled class to the existing page layout, restoring bounded content width, outer gutters and footer placement. Fixed narrow-screen grid sizing and centered helper copy; aligned entry-page headers and tightened signup form spacing. The brand flower now has explicit sizing inside the signup card.
+- Hidden the Messages sidebar/profile navigation and message deep-link handling when server messaging configuration is unavailable. Receipt/demo links retain their existing capability gates. Remaining reachable real-account links and buttons were audited; no placeholder links were found.
+- Local browser checks at 320, 390, 768 and 1280 CSS pixels found no horizontal overflow. Signup/recovery/Back navigation works without sending a phone proof. Formatting, all-workspace TypeScript and the production build passed. Authenticated navigation was checked in source; a real-device signup/passkey remains unverified. Deployment verification follows in the release record.
+
 - Published the private repository and deployed [Render Blueprint tallie-preview](https://dashboard.render.com/blueprint/exs-darm5ad9fdbs73a5qka0). Free web is Live, PostgreSQL is Available, Blueprint Auto Sync and service auto-deploy are off. The actual Docker deployment passed in 2m07s.
 - Added preview startup migrations and bounded proof maintenance; receipt, messaging and simulator gates fail closed. Removed the free-plan-incompatible shutdown override after Render's planner rejected it. The paid four-role alternative stays in `deploy/render-paid.yaml`.
 - Formatting, TypeScript, **278 tests in 20 files**, Next production build and both GitHub CI runs passed. An isolated ARM64 container with hard 512 MiB / 0.1 CPU limits passed 11 smoke groups: startup 22.7s, observed peak memory 166.4 MiB, no OOM, shutdown 0.6s. Localhost and existing local data were preserved.

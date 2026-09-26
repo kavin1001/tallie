@@ -20,13 +20,19 @@ const INVITATION_KEY = 'tallie.pending-invitation.v1';
 export function AccountApp({
   invitationEntry = false,
   demoAvailable = false,
+  messagingAvailable = false,
 }: {
   invitationEntry?: boolean;
   demoAvailable?: boolean;
+  messagingAvailable?: boolean;
 }) {
   return (
     <ToastProvider>
-      <AccountContent invitationEntry={invitationEntry} demoAvailable={demoAvailable} />
+      <AccountContent
+        invitationEntry={invitationEntry}
+        demoAvailable={demoAvailable}
+        messagingAvailable={messagingAvailable}
+      />
     </ToastProvider>
   );
 }
@@ -34,9 +40,11 @@ export function AccountApp({
 function AccountContent({
   invitationEntry,
   demoAvailable,
+  messagingAvailable,
 }: {
   invitationEntry: boolean;
   demoAvailable: boolean;
+  messagingAvailable: boolean;
 }) {
   const [state, setState] = useState<IdentityState | null>(null);
   const [authOpen, setAuthOpen] = useState(invitationEntry);
@@ -129,12 +137,12 @@ function AccountContent({
       request = params.get('request');
     const valid = (id: string | null): id is string =>
       !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (valid(draft)) {
+    if (messagingAvailable && valid(draft)) {
       setSelectedDraftId(draft);
       setMessagesOpen(true);
     } else if (valid(expense)) setExpenseId(expense);
     const abort = new AbortController();
-    if (valid(request))
+    if (messagingAvailable && valid(request))
       void api<{ expenseId: string }>(
         `/api/messages/requests/${request}`,
         undefined,
@@ -151,7 +159,7 @@ function AccountContent({
     if (draft || expense || request)
       window.history.replaceState(null, '', window.location.pathname);
     return () => abort.abort();
-  }, [state?.account?.id, state?.account?.ready]);
+  }, [state?.account?.id, state?.account?.ready, messagingAvailable]);
 
   function clearInvitation() {
     setInviteToken(null);
@@ -236,7 +244,7 @@ function AccountContent({
 
   if (!state.account?.ready)
     return (
-      <div className="welcome-shell account-welcome">
+      <div className="welcome-page account-welcome">
         <header className="welcome-header">
           <Wordmark />
           <span className="welcome-beta">
@@ -294,6 +302,7 @@ function AccountContent({
         account={state.account}
         onSignOut={signOut}
         onSecurity={() => setSecurityOpen(true)}
+        messagingAvailable={messagingAvailable}
         onMessages={() => {
           setSelectedDraftId(undefined);
           setMessagesOpen(true);
@@ -356,7 +365,7 @@ function AccountContent({
           onChanged={refresh}
         />
       )}
-      {messagesOpen && (
+      {messagingAvailable && messagesOpen && (
         <AccountMessages
           onClose={() => setMessagesOpen(false)}
           onDraft={(draft) => {

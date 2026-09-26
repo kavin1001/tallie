@@ -14,27 +14,30 @@
   min-height: 100svh;
   max-width: 1280px;
   margin: auto;
-  padding: 0 48px;
+  padding: 0 60px;
 }
 .account-auth-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 34px 0;
+  min-height: 96px;
+  gap: 20px;
 }
 .account-auth-header .text-action {
   display: flex;
   gap: 6px;
   align-items: center;
   text-decoration: none;
+  min-height: 44px;
+  padding: 10px 0 10px 12px;
 }
 .account-auth-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  min-height: calc(100svh - 130px);
-  padding: 30px 0 70px;
-  gap: 100px;
+  min-height: calc(100svh - 96px);
+  padding: 24px 0 48px;
+  gap: clamp(40px, 6vw, 80px);
 }
 .account-auth-card {
   width: 100%;
@@ -42,7 +45,7 @@
   justify-self: center;
   display: flex;
   flex-direction: column;
-  gap: 21px;
+  gap: 16px;
 }
 .account-step {
   font-size: 9px;
@@ -57,9 +60,9 @@
   height: 52px;
   background: #eaf0d7;
   border-radius: 17px;
-  margin-top: 9px;
+  margin-top: 0;
 }
-.account-auth-symbol .flower {
+.account-auth-symbol > svg {
   width: 30px;
   height: 30px;
 }
@@ -81,8 +84,8 @@
 .account-auth-card form {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  margin-top: 5px;
+  gap: 16px;
+  margin-top: 4px;
 }
 .account-auth-card .fine-print {
   font-size: 11px !important;
@@ -111,7 +114,7 @@
   height: 1px;
 }
 .account-auth-aside {
-  min-height: 560px;
+  min-height: 520px;
   border-radius: 150px 150px 24px 24px;
   background: #e9eccd;
   display: flex;
@@ -246,7 +249,7 @@
     gap: 40px;
   }
   .account-auth-shell {
-    padding: 0 28px;
+    padding: 0 40px;
   }
   .account-auth-aside {
     min-height: 510px;
@@ -261,17 +264,17 @@
     padding: 0 25px;
   }
   .account-auth-header {
-    padding: 24px 0;
+    min-height: 80px;
   }
   .account-auth-main {
     display: block;
     min-height: 0;
-    padding: 25px 0 55px;
+    padding: 24px 0 40px;
   }
   .account-auth-card {
     max-width: 385px;
     margin: auto;
-    gap: 20px;
+    gap: 16px;
   }
   .account-auth-aside {
     display: none;
@@ -290,6 +293,7 @@
   }
   .account-welcome .welcome-note {
     max-width: 260px;
+    margin-inline: auto;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
