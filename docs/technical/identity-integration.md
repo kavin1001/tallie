@@ -22,6 +22,12 @@ Phone proof alone never logs into an existing account. A new account's session h
 
 An interrupted first enrollment can resume with **both** its original restricted session and a fresh phone proof. A different browser cannot use a recycled number to reclaim even an account that has not enrolled a passkey. If every factor and the original enrollment session are lost, an approved support recovery process is still required; none is implemented.
 
+### Interrupted signup UI
+
+On initial load, the client resumes an active signup challenge or unfinished account from server state. An unconsumed verified proof returns to the name form; a restricted session returns to passkey enrollment while its existing ten-minute enrollment window is current. The account DTO exposes `enrollmentExpiresAt`, derived from the same deadline used by registration authorization. After expiry, the UI asks for a fresh phone proof and preserves the saved name. Active renewed proofs take precedence over the older session after reload.
+
+Back leaves the signup screen without revoking the restricted session; the landing action becomes **Finish setting up**. Explicit sign-out from an established account retains its existing revocation behavior. Unconsumed proof expiry returns to phone entry, and a registration freshness rejection gives a direct re-verification path. These changes do not lengthen proof/session authority or grant private access before passkey enrollment.
+
 ## Messages channel proof
 
 `POST /api/identity/channel/start {}` requires a recent established session and an idempotency key. The server chooses the account's stored phone; clients cannot replace it. The challenge has purpose `channel` and immutable account/session bindings. The ordinary check endpoint can poll it, but signup/recovery completion rejects its purpose.
@@ -42,12 +48,13 @@ An interrupted first enrollment can resume with **both** its original restricted
 
 ## Local verification
 
-`npx vitest run packages/identity/src/identity.integration.test.ts` passed **20 tests** in an isolated PostgreSQL schema, including:
+`npx vitest run packages/identity/src/identity.integration.test.ts` passed **23 tests** in an isolated PostgreSQL schema, including:
 
 - Concurrent challenge dispatch and signup completion; stable retry session, lost-reply recovery after the provider window, and logout replay rejection.
 - Browser ownership, encrypted PII and rejection of unrelated/demo proof identifiers.
 - Expired, wrong-phone, null-phone, wrong-service and wrong-verification evidence.
 - Restricted-session denial, phone-only account takeover denial, safe interrupted-enrollment resumption.
+- Reload preserves pending/verified proof without redispatch; an expired unconsumed proof permits a fresh attempt. A real Better Auth session with stale enrollment can refresh through fresh same-browser phone proof, preserve account identity and complete synthetic cryptographic passkey enrollment. Private access remains denied until that enrollment succeeds.
 - Recovery hashing, one-use redemption, committed attempt counters, old-session revocation and recent-assurance enforcement.
 - Actual Better Auth session cookies and actual P-256 WebAuthn registration/authentication verification. Replayed assertions, wrong origins, missing user verification and mismatched expected-account headers are rejected. These are synthetic authenticator tests, not device observations.
 - Channel purpose, immutable account/session binding and fresh-assurance checks; proof does not update another session.

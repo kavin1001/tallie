@@ -13,6 +13,7 @@ import { AccountHome } from './account-home';
 import { AccountMessages } from './account-messages';
 import { AccountSecurity } from './account-security';
 import { AccountContext } from './account-context';
+import { shouldResumeSignup } from './signup-flow';
 import './account.css';
 
 const INVITATION_KEY = 'tallie.pending-invitation.v1';
@@ -59,6 +60,7 @@ function AccountContent({
   const [securityOpen, setSecurityOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const generation = useRef(0);
+  const hydrated = useRef(false);
   const claimLock = useRef(false);
   const accountIdRef = useRef(state?.account?.id);
   accountIdRef.current = state?.account?.id;
@@ -67,6 +69,10 @@ function AccountContent({
     try {
       const next = await api<IdentityState>('/api/identity/state');
       if (generation.current === version) {
+        if (!hydrated.current) {
+          hydrated.current = true;
+          setAuthOpen((open) => open || shouldResumeSignup(next));
+        }
         setState(next);
         setError('');
       }
@@ -225,7 +231,7 @@ function AccountContent({
       </div>
     );
 
-  if (!state.account?.ready && (authOpen || state.account))
+  if (!state.account?.ready && authOpen)
     return (
       <AccountAuth
         key={state.account?.id ?? 'anonymous'}
@@ -234,10 +240,7 @@ function AccountContent({
           generation.current++;
           setState(next);
         }}
-        onBack={() => {
-          if (state.account) void signOut();
-          else setAuthOpen(false);
-        }}
+        onBack={() => setAuthOpen(false)}
         invited={Boolean(inviteToken)}
       />
     );
@@ -268,7 +271,8 @@ function AccountContent({
               <br />A little more living.
             </p>
             <Button size="lg" onClick={() => setAuthOpen(true)}>
-              Make yourself at home <ArrowRight size={18} />
+              {shouldResumeSignup(state) ? 'Finish setting up' : 'Make yourself at home'}{' '}
+              <ArrowRight size={18} />
             </Button>
             <span className="welcome-note">
               Real accounts. Shared moments. Payments are coming next.

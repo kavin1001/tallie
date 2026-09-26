@@ -11,6 +11,12 @@ Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented
 
 ## September 26 hosted free-preview milestone
 
+### Interrupted signup repair
+
+- Reproduced the client routing failures in source: reload ignored active cached verification; Back from first-passkey enrollment called sign-out and destroyed the session required for safe resumption; reverification progress could be hidden behind an older enrollment screen after reload.
+- Resume signup from canonical challenge/account state; preserve restricted enrollment on Back; expose the existing enrollment deadline and direct expired flows to fresh phone verification. Saved account names are prefilled during renewed proof completion. Existing-account recovery and private-access requirements are unchanged.
+- Added ten signup-state regressions and three identity integration regressions, including real Better Auth cookie handling and cryptographic passkey completion after stale enrollment. **291 tests across 21 files**, formatting, all-workspace TypeScript and production build passed. Browser fixture checks use synthetic API responses and never contact providers; deployment and device observations remain separate evidence.
+
 ### Frontend refinement
 
 - Corrected the landing wrapper from an unstyled class to the existing page layout, restoring bounded content width, outer gutters and footer placement. Fixed narrow-screen grid sizing and centered helper copy; aligned entry-page headers and tightened signup form spacing. The brand flower now has explicit sizing inside the signup card.

@@ -14,6 +14,7 @@ import { identityClient } from '@tallie/identity/client';
 import { api, errorMessage, RequestError } from '@/lib/client';
 import { Button } from './ui';
 import { Flower, Wordmark } from './brand';
+import { signupStep } from './signup-flow';
 
 export function AccountAuth({
   state,
@@ -27,7 +28,7 @@ export function AccountAuth({
   invited: boolean;
 }) {
   const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(state.account?.name ?? '');
   const [recovery, setRecovery] = useState(state.challenge?.completionMode === 'recovery');
   const [resumePhone, setResumePhone] = useState(false);
   const [pollTick, setPollTick] = useState(0);
@@ -68,7 +69,8 @@ export function AccountAuth({
     if (active.current) onStateRef.current(next);
   }
 
-  const pending = challenge?.status === 'pending' || challenge?.status === 'creating';
+  const step = signupStep(state, resumePhone, now);
+  const pending = step === 'verification';
   useEffect(() => {
     if (!pending || !challenge || busy) return;
     const abort = new AbortController();
@@ -94,11 +96,11 @@ export function AccountAuth({
   }, [pending, challenge, busy, state, pollTick]);
 
   useEffect(() => {
-    if (!pending) return;
     setNow(Date.now());
+    if (!challenge && !state.account?.enrollmentExpiresAt) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [pending]);
+  }, [challenge?.id, challenge?.expiresAt, state.account?.enrollmentExpiresAt]);
 
   async function passkeySignIn() {
     await run('passkey', async () => {
@@ -157,6 +159,10 @@ export function AccountAuth({
           onStateRef.current({ ...state, account: result.account, challenge: null });
         }
       } catch (e) {
+        if (e instanceof RequestError && e.code === 'PHONE_PROOF_REQUIRED') {
+          await refresh();
+          throw new Error('That verification has expired. Verify your number again to continue.');
+        }
         if (e instanceof RequestError && e.code === 'ACCOUNT_RECOVERY_REQUIRED') {
           setRecovery(true);
           throw new Error(
@@ -176,6 +182,11 @@ export function AccountAuth({
           ? { fetchOptions: { headers: { 'X-Tallie-Account': state.account.id } } }
           : {}),
       });
+      if (result.error && 'code' in result.error && result.error.code === 'STEP_UP_REQUIRED') {
+        setResumePhone(true);
+        await refresh();
+        throw new Error('Verify your number again, then finish creating your passkey.');
+      }
       if (result.error)
         throw new Error(
           'We couldn’t save that passkey. Try again on this device, or resume signup on a supported device.',
@@ -196,7 +207,8 @@ export function AccountAuth({
     Math.ceil((new Date(challenge?.expiresAt ?? now).getTime() - now) / 1000),
   );
   const delivery = pending && secondsLeft > 0 ? challenge?.delivery : null;
-  const onboarding = state.account && !state.account.ready && !resumePhone;
+  const unfinishedAccount = Boolean(state.account && !state.account.ready);
+  const proofExpired = Boolean(challenge && Date.parse(challenge.expiresAt) <= now);
 
   return (
     <div className="account-auth-shell">
@@ -211,7 +223,7 @@ export function AccountAuth({
           <span className="account-step">
             {invited ? 'A GOOD TIME IS WAITING FOR YOU' : 'A LITTLE LESS SETTLING UP'}
           </span>
-          {onboarding ? (
+          {step === 'passkey' ? (
             <>
               <div className="account-auth-symbol">
                 <Fingerprint size={31} strokeWidth={1.3} />
@@ -254,7 +266,7 @@ export function AccountAuth({
                 Need to verify your number again?
               </button>
             </>
-          ) : challenge?.status === 'verified' || challenge?.status === 'complete' ? (
+          ) : step === 'details' ? (
             <>
               <div className="account-auth-symbol">
                 <Check size={28} />
@@ -370,18 +382,22 @@ export function AccountAuth({
                 <Flower />
               </div>
               <h1>
-                {recovery ? 'Let’s get you' : 'You bring the'}
+                {unfinishedAccount ? 'Let’s finish' : recovery ? 'Let’s get you' : 'You bring the'}
                 <br />
-                <em>{recovery ? 'back in.' : 'good company.'}</em>
+                <em>
+                  {unfinishedAccount ? 'setting up.' : recovery ? 'back in.' : 'good company.'}
+                </em>
               </h1>
               <p>
-                {recovery
-                  ? 'First, verify your number. Then use a saved recovery code.'
-                  : 'We’ll handle the little things. Start with your mobile number.'}
+                {unfinishedAccount
+                  ? 'Your name is saved. Verify the same mobile number again, then create your passkey.'
+                  : recovery
+                    ? 'First, verify your number. Then use a saved recovery code.'
+                    : 'We’ll handle the little things. Start with your mobile number.'}
               </p>
-              {challenge && (
+              {challenge && !unfinishedAccount && (
                 <p className="form-hint">
-                  {challenge.status === 'expired'
+                  {proofExpired || challenge.status === 'expired'
                     ? 'That code has expired. Start again when you’re ready.'
                     : 'We couldn’t finish that verification. Please try again.'}
                 </p>

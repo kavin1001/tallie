@@ -18,6 +18,7 @@ import { SignupService } from './signup';
 import type { AccountPrincipal, IdentityAccount } from './contracts';
 
 export const SIGNUP_COOKIE = 'tallie_signup';
+const onboardingEnrollmentWindowMs = 10 * 60_000;
 export function browserTokenFromHeaders(headers: Headers): string | null {
   const cookie = headers
     .get('cookie')
@@ -59,7 +60,7 @@ export async function accountForSession(
     .selectFrom('auth_session as s')
     .innerJoin('auth_user as u', 'u.id', 's.user_id')
     .innerJoin('identity_phone_bindings as p', 'p.user_id', 'u.id')
-    .select(['u.id', 'u.name', 'p.masked_phone', 's.assurance_kind'])
+    .select(['u.id', 'u.name', 'p.masked_phone', 's.assurance_kind', 's.created_at'])
     .where('s.id', '=', sessionId)
     .where('s.expires_at', '>', new Date())
     .executeTakeFirst();
@@ -80,6 +81,10 @@ export async function accountForSession(
     passkeyCount: passkeys.length,
     recoveryCodesRemaining: codes.length,
     assurance: row.assurance_kind,
+    enrollmentExpiresAt:
+      row.assurance_kind === 'onboarding'
+        ? new Date(row.created_at.getTime() + onboardingEnrollmentWindowMs).toISOString()
+        : null,
     ready: row.assurance_kind !== 'onboarding',
   };
 }
@@ -294,7 +299,7 @@ export function createIdentityAuth(config: {
           const fresh =
             row &&
             (row.assurance_kind === 'onboarding'
-              ? Date.now() - row.created_at.getTime() < 10 * 60_000
+              ? Date.now() - row.created_at.getTime() < onboardingEnrollmentWindowMs
               : row.assurance_at && Date.now() - row.assurance_at.getTime() < 15 * 60_000);
           if (!fresh)
             throw new APIError('FORBIDDEN', {

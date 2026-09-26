@@ -15,7 +15,7 @@ import { migrate } from '../../db/src/migrate';
 import { createIdentityDatabase, lockAccount, type IdentityDatabase } from './database';
 import { SignupService } from './signup';
 import { digest, normalizePhone, opaqueToken } from './crypto';
-import { createIdentityAuth, requireAccount } from './auth';
+import { accountForSession, createIdentityAuth, requireAccount } from './auth';
 import {
   cleanupExpiredIdentityProofs,
   listAccountPasskeys,
@@ -145,6 +145,60 @@ describe('persistent identity PostgreSQL and real WebAuthn verification', () => 
     await expect(f.service.complete(f.browser, c.id, { name: 'Taylor' })).rejects.toMatchObject({
       code: 'PHONE_PROOF_REQUIRED',
     });
+  });
+  it('restores pending and verified signup after reload without creating an account or dispatching again', async () => {
+    const f = fixture(),
+      proof = await f.start();
+    // A fresh service instance models a later request after the browser reloads.
+    const reloaded = new SignupService(db, f.provider, f.vault, serviceSid);
+    expect(await reloaded.current(f.browser)).toEqual(proof);
+    expect(await reloaded.current(opaqueToken())).toBeNull();
+    f.result({ status: 'approved' });
+    const verified = await reloaded.check(f.browser, proof.id);
+    expect(verified.status).toBe('verified');
+    expect(await f.service.current(f.browser)).toEqual(verified);
+    expect(verified.delivery).toBeNull();
+    expect(
+      await db
+        .selectFrom('identity_phone_bindings')
+        .select('user_id')
+        .where('phone_hash', '=', f.vault.lookup(f.phone))
+        .executeTakeFirst(),
+    ).toBeUndefined();
+    const created = await reloaded.complete(f.browser, proof.id, { name: 'Resumed signup' });
+    expect(created.userId).toBeTruthy();
+    expect(f.provider.create).toHaveBeenCalledTimes(1);
+    expect(f.provider.retrieve).toHaveBeenCalledTimes(1);
+  });
+  it('expires an unconsumed verified proof and permits fresh verification in the same browser', async () => {
+    const f = fixture(),
+      proof = await f.verified();
+    f.advance(6 * 60_000);
+    expect((await f.service.current(f.browser))?.status).toBe('expired');
+    f.result({
+      status: 'pending',
+      sid: `VR${randomUUID().replaceAll('-', '')}`,
+      expires_at: new Date(Date.now() + 11 * 60_000).toISOString(),
+    });
+    const fresh = await f.start();
+    expect(fresh.id).not.toBe(proof.id);
+    expect(await f.service.current(f.browser)).toEqual(fresh);
+    f.result({ status: 'approved' });
+    expect((await f.service.check(f.browser, fresh.id)).status).toBe('verified');
+    await expect(
+      f.service.complete(f.browser, proof.id, { name: 'Expired' }),
+    ).rejects.toMatchObject({
+      code: 'PHONE_PROOF_REQUIRED',
+    });
+    const created = await f.service.complete(f.browser, fresh.id, { name: 'Fresh proof' });
+    expect(
+      await db
+        .selectFrom('identity_phone_bindings')
+        .select('user_id')
+        .where('phone_hash', '=', f.vault.lookup(f.phone))
+        .execute(),
+    ).toEqual([{ user_id: created.userId }]);
+    expect(f.provider.create).toHaveBeenCalledTimes(2);
   });
   it('consumes signup once and produces only an onboarding session, with a stable retry result', async () => {
     const f = fixture(),
@@ -636,6 +690,91 @@ describe('persistent identity PostgreSQL and real WebAuthn verification', () => 
       },
     };
   }
+  it('restores enrollment freshness and resumes a stale enrollment using the same browser session and fresh proof', async () => {
+    const f = fixture(),
+      proof = await f.verified();
+    const auth = createIdentityAuth({
+      db,
+      origin,
+      secret: 'synthetic-test-secret-with-at-least-32-characters',
+      signup: f.service,
+    });
+    const browser = client(auth, f.browser);
+    const completed = await browser.request('/complete-phone', {
+      mode: 'signup',
+      challengeId: proof.id,
+      name: 'Interrupted enrollment',
+    });
+    expect(completed.status).toBe(200);
+    const original = await auth.api.getSession({ headers: browser.headers() });
+    expect(original).not.toBeNull();
+    const stored = await db
+      .selectFrom('auth_session')
+      .selectAll()
+      .where('id', '=', original!.session.id)
+      .executeTakeFirstOrThrow();
+    const freshAccount = await accountForSession(db, stored.id);
+    expect(freshAccount).toMatchObject({
+      ready: false,
+      enrollmentExpiresAt: new Date(stored.created_at.getTime() + 10 * 60_000).toISOString(),
+    });
+    expect((await browser.request('/passkey/generate-register-options')).status).toBe(200);
+
+    const interruptedAt = new Date(Date.now() - 20 * 60_000);
+    await db
+      .updateTable('auth_session')
+      .set({ created_at: interruptedAt })
+      .where('id', '=', stored.id)
+      .execute();
+    expect(await accountForSession(db, stored.id)).toMatchObject({
+      ready: false,
+      enrollmentExpiresAt: new Date(interruptedAt.getTime() + 10 * 60_000).toISOString(),
+    });
+    expect((await browser.request('/passkey/generate-register-options')).status).toBe(403);
+
+    f.advance(1);
+    f.result({
+      status: 'pending',
+      sid: `VR${randomUUID().replaceAll('-', '')}`,
+      expires_at: new Date(Date.now() + 300_000).toISOString(),
+    });
+    const replacement = await f.start();
+    expect(await f.service.current(f.browser)).toEqual(replacement);
+    expect((await auth.api.getSession({ headers: browser.headers() }))?.session.id).toBe(stored.id);
+    f.result({ status: 'approved' });
+    const verified = await f.service.check(f.browser, replacement.id);
+    expect(await f.service.current(f.browser)).toEqual(verified);
+    expect(verified.status).toBe('verified');
+    const resumed = await browser.request(
+      '/complete-phone',
+      { mode: 'signup', challengeId: replacement.id, name: 'Interrupted enrollment' },
+      stored.user_id,
+    );
+    expect(resumed.status).toBe(200);
+    const current = await auth.api.getSession({ headers: browser.headers() });
+    expect(current?.user.id).toBe(stored.user_id);
+    expect(current?.session.id).not.toBe(stored.id);
+    expect(await accountForSession(db, stored.id)).toBeNull();
+    const restoredAccount = await accountForSession(db, current!.session.id);
+    expect(restoredAccount?.ready).toBe(false);
+    expect(Date.parse(restoredAccount!.enrollmentExpiresAt!)).toBeGreaterThan(Date.now());
+    await expect(
+      requireAccount(new Request(origin, { headers: browser.headers() }), db, auth),
+    ).rejects.toMatchObject({ code: 'PASSKEY_REQUIRED' });
+
+    const options = await browser.request('/passkey/generate-register-options');
+    expect(options.status).toBe(200);
+    const enrollment = await browser.request('/passkey/verify-registration', {
+      response: syntheticAuthenticator().registration(String(options.body.challenge)),
+      name: 'Resumed passkey',
+    });
+    expect(enrollment.status).toBe(200);
+    expect(await accountForSession(db, current!.session.id)).toMatchObject({
+      ready: true,
+      assurance: 'passkey',
+      enrollmentExpiresAt: null,
+    });
+  });
   it('uses Better Auth real session cookies and WebAuthn signature verification for enrollment, sign-in, replay, origin and UV rejection', async () => {
     const f = fixture(),
       proof = await f.verified();

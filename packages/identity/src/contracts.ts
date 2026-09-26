@@ -12,6 +12,8 @@ export interface IdentityAccount {
   passkeyCount: number;
   recoveryCodesRemaining: number;
   assurance: 'onboarding' | 'passkey' | 'recovery';
+  /** First-passkey enrollment deadline for this restricted session; null once established. */
+  enrollmentExpiresAt: string | null;
   ready: boolean;
 }
 
