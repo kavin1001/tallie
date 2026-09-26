@@ -28,6 +28,8 @@ On initial load, the client resumes an active signup challenge or unfinished acc
 
 Back leaves the signup screen without revoking the restricted session; the landing action becomes **Finish setting up**. Explicit sign-out from an established account retains its existing revocation behavior. Unconsumed proof expiry returns to phone entry, and a registration freshness rejection gives a direct re-verification path. These changes do not lengthen proof/session authority or grant private access before passkey enrollment.
 
+The first live retry confirmed phone proof but exposed a draft whose session had already been lost before this repair. Read-only account metadata confirmed it had no credentials or product activity. This remains blocked pending an explicitly approved, narrowly scoped operator reset of that empty draft; no phone-only recovery endpoint or restored session token is introduced. Such a reset must recheck credentials and all account references in the same short transaction, preserve historical signup/rate-limit evidence, and refuse a changed or non-empty account. It does not establish a recovery policy for accounts with activity.
+
 ## Messages channel proof
 
 `POST /api/identity/channel/start {}` requires a recent established session and an idempotency key. The server chooses the account's stored phone; clients cannot replace it. The challenge has purpose `channel` and immutable account/session bindings. The ordinary check endpoint can poll it, but signup/recovery completion rejects its purpose.
