@@ -1,6 +1,6 @@
 # Hosted private beta deployment
 
-Updated September 26, 2026. **Private GitHub repository created; free preview preparation is in progress. No hosting or storage resources provisioned yet.** Natural payments remain unavailable regardless of hosting configuration.
+Updated September 26, 2026. **The free preview is live at [tallie-web.onrender.com](https://tallie-web.onrender.com); source is published to private GitHub. AWS storage is deferred under the $0 constraint.** Natural payments remain unavailable regardless of hosting configuration.
 
 ## Authorized first deployment: $0 preview
 
@@ -11,10 +11,30 @@ The founder authorized private `kavin1001/tallie`, Render hosting with a tempora
 - **Startup:** migrate before accepting traffic because free Render services cannot use pre-deploy hooks. Run bounded proof cleanup inside the web instance, with no separate worker service. Cleanup resumes after a sleeping instance wakes; expired proofs already fail authorization independently of deletion.
 - **Origin:** use Render's platform-supplied HTTPS external URL until a final origin is chosen. Never derive passkey/cookie trust from an incoming request header. Credentials enrolled on the temporary hostname will not automatically transfer to another domain.
 - **Storage:** this preview stores no receipt files and needs no S3 credentials. Create the requested private bucket only after account access and free-plan coverage are verified. Do not silently enable paid AWS features or treat a billing alert as a spending cap.
-- **Access:** GitHub CLI authentication is available. Render/AWS browser sessions currently show sign-in screens; API access can be provided in ignored, owner-only `.env.hosting.local`.
+- **Access:** GitHub CLI and Render/AWS browser sessions are authenticated. An ignored, owner-only `.env.hosting.local` template remains available as an optional API alternative; it is not required for the current browser deployment.
 - **Cost limitations:** [free Render](https://render.com/docs/free) sleeps after 15 idle minutes, may take about a minute to wake, and provides a 1 GB PostgreSQL database that expires after 30 days with no backups. A free compute selection is not an unconditional spending cap if a payment method and usage overages are enabled. Check the workspace's actual billing configuration before deployment.
 
-The following full-topology sections describe the retained paid design and its earlier local container checks. They are not evidence that the free preview has been deployed or that paid resources are authorized.
+The full-topology sections below describe the retained paid design and its earlier local container checks. The following release record describes the actual free deployment; paid resources remain outside the current authorization.
+
+### Free-preview verification and release record
+
+- Source published to private [kavin1001/tallie](https://github.com/kavin1001/tallie). Initial release `3a9ef38`; free-plan configuration correction `d06a780` removes `maxShutdownDelaySeconds`, which Render's actual planner rejects on free services even though the general schema accepts it.
+- Local formatting, all-workspace TypeScript, **278 tests in 20 files**, and Next production build passed. Four duplicate generated `.next/types/* 2.ts` files caused the first local typecheck to fail; removing only those ignored generated duplicates restored the clean check. No source type errors were suppressed.
+- Both native Linux GitHub CI runs passed: [initial release](https://github.com/kavin1001/tallie/actions/runs/36223099150) and [deployed correction](https://github.com/kavin1001/tallie/actions/runs/36223159534).
+- Native Linux ARM64 Docker image `tallie:free-preview` built successfully. A hard **512 MiB / 0.1 CPU / no-swap** runtime test used an isolated schema, fresh throwaway keys and fake provider configuration. Startup including all 11 migrations took **22.7 seconds**; 11 HTTP groups passed, including authenticated disabled-feature checks, anonymous denial, secure cookies, origin-bound auth and beta/demo isolation. Peak cgroup memory **166.4 MiB**, zero OOM events, graceful stop **0.6 seconds / exit 0**. Test schema and container were removed; localhost:3000 was unchanged. This is local constrained evidence, not hosted load testing.
+- Render account billing inspected: **Hobby**, no card on file, zero pending charges, unused 750 free instance hours / 5 GB bandwidth / 500 pipeline minutes at provisioning. No paid compute or storage selection was made.
+- Blueprint [tallie-preview](https://dashboard.render.com/blueprint/exs-darm5ad9fdbs73a5qka0) deployed `d06a7808113a6246f9c9bad099bcc7e52395e361`. Auto Sync is **No**, verified in the dashboard; service auto-deploys are also off. Use deliberate manual sync/deploy for future changes.
+- [Free web service](https://dashboard.render.com/web/srv-darm6kvavr4c73f8qnv0/deploys) is **Live**. Render's Docker build/deploy succeeded in **2m07s**, deploy `dep-darm6kvavr4c73f8qpdg`. This verifies the actual target host independently of the earlier local QEMU failure.
+- [Free PostgreSQL 17](https://dashboard.render.com/d/dpg-darm62navr4c73f8oskg-a/info) is **Available** in Virginia, with 1 GB storage and autoscaling disabled. Database-specific inbound rules block all internet traffic. It **expires October 26, 2026** and has no free-plan backups; use disposable test data and decide its replacement/export before expiry.
+- Live HTTPS checks passed: `/` and `/api/status` returned 200; `/api/identity/state` returned 200 with identity available, no signed-in account, a Secure/HttpOnly/SameSite=Lax cookie and private/no-store caching; anonymous `/api/social/dashboard` returned 401; `/demo` returned 404; disabled message intake returned 503; an incorrect-Origin signup POST returned 403 without calling the provider. The live landing and signup form render in the browser. No phone proof, actual device passkey ceremony, message sending or money movement was performed during these checks.
+- AWS billing and Free Tier pages were inspected. They show $0 current charges and no Free Tier usage data, but do not establish an active Free account plan with remaining credits. Consequently no bucket, policy, IAM identity or object was created under the $0 constraint. See [AWS preparation](aws-preview-setup.md). This does not block the account/manual-split preview, which has no receipt storage access.
+
+### Next founder test
+
+1. Open [Tallie](https://tallie-web.onrender.com) on the phone used for the earlier Sendblue proof. Allow about a minute for an idle service to wake.
+2. Complete signup through Messages, enroll a passkey, and save the recovery code privately. Sign out and use the passkey to sign back in.
+3. With a consenting second tester, create a contact and manual split, share the private invitation, and complete the intended recipient's signup/claim. Confirm both accounts see the same shares.
+4. Record device/OS/browser versions and observed results. These steps remain unverified on the hosted app. Use disposable preview data and plan passkey enrollment again when moving to the permanent domain.
 
 ## Retained full topology (paid; deferred)
 
@@ -121,15 +141,15 @@ The outgoing switch defaults to false in both web and worker configuration. Upda
 - **Configuration loss:** recover stable encryption keys from secure backup before restarting encrypted-data workflows. Generating replacements silently is not recovery.
 - **Monitoring to enable:** web error rate/latency, Postgres connection usage, worker job age, receipt failures/quota, message inbox/outbox lag, unknown delivery outcomes, and backup/restore alerts. Operational paging and a measured restore objective remain pilot gates.
 
-## Verification record
+## Earlier full-topology preparation evidence
 
 - `render.yaml` validated against Render's current [official JSON Schema](https://render.com/schema/render.yaml.json) using AJV 2020 and YAML 1.2: **passed locally**.
 - Node 24 bookworm image manifest resolved to an immutable multi-architecture digest; no provider secrets are Docker build inputs.
 - A Docker BuildKit context export contained 214 allowed source/config files (about 1 MB). A local scan found zero `.env`, `.tallie`, `.git`, or `node_modules` paths and zero configured credential-value matches. The temporary context export was removed after checking.
 - **Native Linux ARM64 container build passed**, including Next production compilation, TypeScript, and page generation. The image ran as UID 1000 with Node 24.21.0. `/app/.env`, `/app/.tallie`, and `/app/.git` were absent.
 - **Container runtime smoke passed** against a newly created isolated PostgreSQL schema: all 11 migrations applied inside the image; `/api/status` and `/` returned 200; `/demo` returned 404; demo mutation returned 503; anonymous social access returned 401. Maintenance, receipt, and messaging worker containers all started and remained running without startup errors. Tests supplied fake provider credentials, no jobs, and disabled message dispatch. Test containers and schema were removed afterward.
-- **AMD64 emulation is not verified:** the Linux AMD64 build compiled and passed TypeScript, then Docker QEMU raised SIGSEGV during Next page-data collection on this ARM Mac. The native ARM64 run passed that stage. Run the same Dockerfile on a native AMD64 build host or Render before treating that architecture as verified.
-- No Render API deployment, paid resource creation, DNS update, S3 provisioning, provider callback change, or message sending has been performed by this preparation.
+- **Local AMD64 emulation failed:** the Linux AMD64 build compiled and passed TypeScript, then Docker QEMU raised SIGSEGV during Next page-data collection on this ARM Mac. The native ARM64 run passed that stage. The later actual Render Docker build/deploy passed, as recorded above; local QEMU remains unverified.
+- At this earlier preparation milestone no hosting was provisioned. The free deployment above supersedes that status. No paid resource creation, custom DNS update, S3 provisioning, provider callback change, or message sending has been performed.
 
 The local preflight image is tagged `tallie:beta-preflight`. Rebuild from the intended release commit before deployment:
 

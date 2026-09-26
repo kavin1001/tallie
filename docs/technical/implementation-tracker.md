@@ -1,12 +1,22 @@
 # Implementation tracker
 
 **Updated:** September 26, 2026  
-**Current phase:** Real-account application implemented locally; authorized free Render preview being prepared. Private `kavin1001/tallie` repository created, source publication and hosting verification pending.  
+**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `d06a780` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
+
 **Provider status:** Sendblue phone proof worked in the earlier development test. OpenAI synthetic receipt extraction passed earlier live checks. Natural sandbox and consumer-P2P acceptance remain pending. The free hosted preview disables receipt processing and messaging, retaining Sendblue Verify for signup.
 
-**Current deployment constraint:** $0 infrastructure budget. Default Render configuration is being changed to free web/PostgreSQL; paid worker topology is retained separately. Hosting access is being supplied through browser sign-in. A local ignored hosting-credential template exists as an optional API alternative. No credential values belong in these notes.
+**Current deployment constraint:** $0 infrastructure budget. Free Render web/PostgreSQL deployed; paid worker topology remains inactive. Public DB access is blocked. The web sleeps after inactivity and the database expires October 26, 2026, with no backups. AWS storage is deferred because account-specific free-plan coverage was not confirmed. No credential values belong in these notes.
 
 Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented`, `Verified in sandbox`, `Verified in pilot`. A working mock is not a completed live integration.
+
+## September 26 hosted free-preview milestone
+
+- Published the private repository and deployed [Render Blueprint tallie-preview](https://dashboard.render.com/blueprint/exs-darm5ad9fdbs73a5qka0). Free web is Live, PostgreSQL is Available, Blueprint Auto Sync and service auto-deploy are off. The actual Docker deployment passed in 2m07s.
+- Added preview startup migrations and bounded proof maintenance; receipt, messaging and simulator gates fail closed. Removed the free-plan-incompatible shutdown override after Render's planner rejected it. The paid four-role alternative stays in `deploy/render-paid.yaml`.
+- Formatting, TypeScript, **278 tests in 20 files**, Next production build and both GitHub CI runs passed. An isolated ARM64 container with hard 512 MiB / 0.1 CPU limits passed 11 smoke groups: startup 22.7s, observed peak memory 166.4 MiB, no OOM, shutdown 0.6s. Localhost and existing local data were preserved.
+- Live HTTPS verified readiness, configured identity, secure session cookies/no-store caching, anonymous social denial, disabled demo/message intake, wrong-origin signup rejection, and the visible landing/signup form. No live phone proof, passkey enrollment, provider message or money movement was performed in this deployment task.
+- Render billing showed Hobby, no card and no pending charges at provisioning. AWS showed $0 current charges but no evidence of active Free plan/credits; no bucket, IAM identity or object was created. [Release and test record](deployment.md).
+- **Next action:** founder phone signup, passkey enrollment/sign-in and secure recovery-code saving; then a consenting second tester's invitation/manual-split claim. Record device evidence. Before October 26, decide how to export/replace the temporary database. Broader beta still needs the final domain and independent provider/privacy/operations gates below.
 
 The table below records the original implementation baseline; dated milestones later in this document supersede those original statuses.
 

@@ -2,6 +2,8 @@
 
 **Updated:** September 26, 2026. **Status:** S3 adapter implemented and tested with mocked SDK ports. No AWS bucket, IAM identity, lifecycle rule, credential, upload, or deployed role permission has been provisioned or verified by this work.
 
+The [live free Render preview](deployment.md) disables receipt intake and requires no S3 credentials. AWS billing was inspected, but active Free-plan credit/expiry coverage was not established, so storage remains deferred under the founder's $0 budget. [Account eligibility gate](aws-preview-setup.md).
+
 Separate web and receipt-worker services cannot rely on the same local directory. Local development keeps the filesystem adapter. Deployment can select the S3 adapter, with a private bucket shared by narrowly scoped service identities.
 
 ## Configuration

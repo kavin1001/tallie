@@ -66,13 +66,15 @@ The opt-in receipt evaluation uploads synthetic fixtures and incurs real extract
 npx tsx scripts/evaluate-receipts.ts --live-synthetic
 ```
 
-See the dated [implementation tracker](docs/technical/implementation-tracker.md) for evidence and outstanding checks. CI is configured, but no remote CI run has been claimed.
+See the dated [implementation tracker](docs/technical/implementation-tracker.md) for evidence and outstanding checks. Local formatting, TypeScript, 278 tests and the production build pass; [GitHub CI passed for the deployed commit](https://github.com/kavin1001/tallie/actions/runs/36223159534).
 
 ## Deploy
 
+**Live preview:** [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `d06a780`. Live HTTPS/session/access-control checks passed on September 26, 2026; native phone signup/passkey and two-person invitation testing remain next. Blueprint sync and service deployments are manual.
+
 The default `render.yaml` targets the founder-authorized **$0 infrastructure preview**: one free web service and one free PostgreSQL database. It supports real accounts, passkeys, recovery, contacts, invitations and manual splits. Receipt capture, messaging intake/delivery and payments are disabled. The preview starts with database migrations and runs proof cleanup alongside the web process. See the [deployment guide](docs/technical/deployment.md) for current verification and deployment status.
 
-Render's free web service sleeps after inactivity, and its free database expires after 30 days without backups. Use disposable test data and move to the chosen stable domain before enrolling outside testers. Sendblue verification is separate provider usage and is not covered by the infrastructure budget.
+Render's free web service sleeps after inactivity, and this free database expires **October 26, 2026**, without backups. Public database access is blocked. Use disposable test data and move to the chosen stable domain before enrolling a wider cohort. Sendblue verification is separate provider usage and is not covered by the infrastructure budget.
 
 The separate `deploy/render-paid.yaml` preserves the full web/three-worker/private-database topology for a later approved upgrade. Private S3 receipt storage remains a separate provisioning step, subject to the AWS account's verified free-plan eligibility; the free web preview requires no AWS credentials. Hosting credentials belong in ignored `.env.hosting.local`, never in source control or Docker build arguments.
 

@@ -8,13 +8,15 @@
 
 ### ADR-025 — Free hosted account preview before worker-backed beta
 
-**Date:** September 26, 2026. **Status:** implementation in progress; deployment unverified. **Authority:** founder explicitly authorized a private `kavin1001/tallie` repository and temporary Render hosting with a $0 infrastructure budget.
+**Date:** September 26, 2026. **Status:** implemented and deployed; live HTTPS/session/access checks passed, native device journeys remain pending. **Authority:** founder explicitly authorized a private `kavin1001/tallie` repository and temporary Render hosting with a $0 infrastructure budget.
 
 Use one free Render web service and one free PostgreSQL instance. Run additive, advisory-locked migrations before the web process starts and bounded identity-proof cleanup within the same instance. The launcher forces real-account beta mode and disables receipts, messaging intake/delivery and demo payments. Keep the full paid configuration separately for a future explicit upgrade.
 
 This preserves useful account, passkey, recovery, contact, invitation and manual-split testing without idle worker charges. The tradeoffs are cold starts, limited memory, cleanup pausing during sleep, and a database that expires after 30 days without backups. The prototype must not promise continuous messaging or durable production history. Expired-proof authorization fails independently of maintenance deletion.
 
 A temporary Render hostname is acceptable for founder testing. Use a fixed platform-provided HTTPS origin, and plan new passkey enrollment when moving to the eventual domain. Private S3 provisioning remains authorized only when AWS's account-specific Free plan and credit/expiry state establish no charges; it is unnecessary for this preview while receipt intake is disabled. Existing Sendblue phone-verification usage remains separate provider usage.
+
+**Observed deployment:** [tallie-web.onrender.com](https://tallie-web.onrender.com) runs `d06a780`; free PostgreSQL has public access blocked and expires October 26, 2026. Blueprint sync and deployments are manual. AWS storage was deferred because the authenticated account's free-plan coverage was not established. Local tests, Linux CI, a constrained container smoke and public HTTPS checks passed; this does not establish native device or financial readiness.
 
 **Revisit:** receipt/iMessage testing, database expiry, measured memory pressure, or the chosen permanent domain. [Render free-plan limits](https://render.com/docs/free), [deployment guide](deployment.md).
 

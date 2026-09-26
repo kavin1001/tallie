@@ -2,6 +2,8 @@
 
 **September 26, 2026 — prepared configuration, not applied.** No AWS credentials were read, no authenticated AWS API was called, and no bucket or IAM identity was created by this task. The current preview keeps receipt uploads disabled. Browser setup is the founder's current preference; the optional policy below is for a future API workflow.
 
+**Console inspection:** authenticated Billing and Free Tier pages were inspected during deployment. They show $0 month-to-date charges and no Free Tier usage data, but do not confirm an active Free account plan with credits and a future expiry. Storage provisioning is therefore deferred under the $0 budget. No account plan or payment setting was changed. The Render account preview does not require AWS storage.
+
 ## Confirm the $0 constraint first
 
 In AWS Console Home / Billing, verify the account is on the **Free account plan**, active, with remaining credit and a future expiration. AWS's free plan ends at six months or credit exhaustion, whichever is earlier; the account then closes. A paid plan with credit can still incur charges beyond its coverage. Under the current $0-only authorization, an unknown or paid plan means **defer S3 and leave receipts disabled**. [AWS plan comparison](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html).
