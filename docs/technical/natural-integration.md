@@ -1,6 +1,6 @@
 # Natural integration: sandbox accounts and balances
 
-Updated September 26, 2026. **Implemented locally; authenticated sandbox verification pending.** The founder has obtained a key but has not yet confirmed its environment or consumer P2P approval. No Natural credential has been printed or committed, and this milestone made no authenticated provider calls.
+Updated September 26, 2026. **Implemented locally; authenticated sandbox verification pending.** The supplied party key is identified by its prefix as production; it has not been sent to Natural. Sandbox credentials and consumer P2P approval remain pending. No Natural credential has been printed or committed, and this milestone made no authenticated provider calls.
 
 **Founder release rule:** keep this integration local. Do not push or deploy it to production until the founder has tested locally and approved release. Hosted `94a2240` remains unchanged.
 
@@ -18,7 +18,7 @@ No account route or worker calls payment mutations. `moneyMovementEnabled` and t
 
 1. Put the sandbox **party** key in the ignored root `.env` as `NATURAL_API_KEY`. Do not paste keys into chat. `NATURAL_PROVISIONING_API_KEY` is an explicit alias; conflicting values are rejected.
 2. Run `npm run natural:check`. With only that credential present, it verifies the sandbox party and reports its nonsecret platform ID. Save that as `NATURAL_PLATFORM_PARTY_ID`.
-3. Create or identify the platform's sandbox agent and its bound agent key in Natural. Save `NATURAL_AGENT_ID` and `NATURAL_AGENT_KEY`. Confirm that exact key belongs to that agent. A read of `/parties/me` or `/agents/{id}` does **not** prove credential-to-agent association; no public introspection endpoint supplies that proof. Controlled key creation can establish it later.
+3. Create or identify the platform's sandbox agent and its bound agent key in Natural. Save `NATURAL_AGENT_ID` and `NATURAL_AGENT_KEY`. Confirm that exact key belongs to that agent. A read of `/parties/me` or `/agents/{id}` does **not** prove credential-to-agent association; no public introspection endpoint supplies that proof. Current Natural guidance requires a user session to issue an agent key, so the party API key alone cannot bootstrap it. Use the dashboard, which handles agent creation and credential issuance together. [Agent setup](https://docs.natural.com/guides/agents/create-agent).
 4. Set `NATURAL_ENVIRONMENT=sandbox`. Run the read-only check again; it checks both credential parties and agent ownership. Confirm the platform/agent is active. API success does not establish consumer-P2P approval.
 5. Apply `npm run db:migrate` to the intended local database and set `NATURAL_SANDBOX_ENABLED=true`. Restart the web role. Hosted preview migration runs during startup; configure hosting secrets separately and deploy deliberately when ready.
 6. Sign into Tallie, then explicitly choose **Create test account**. Natural creates a synthetic PERSON through `/simulations/invite-customer`; Tallie accepts that exact invitation, checks the canonical customer delegation/agent and reads owned wallets. It sends no real phone/email invitation. This is not real consumer KYC.
