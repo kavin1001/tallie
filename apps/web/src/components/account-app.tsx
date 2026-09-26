@@ -22,10 +22,12 @@ export function AccountApp({
   invitationEntry = false,
   demoAvailable = false,
   messagingAvailable = false,
+  sandboxPaymentsAvailable = false,
 }: {
   invitationEntry?: boolean;
   demoAvailable?: boolean;
   messagingAvailable?: boolean;
+  sandboxPaymentsAvailable?: boolean;
 }) {
   return (
     <ToastProvider>
@@ -33,6 +35,7 @@ export function AccountApp({
         invitationEntry={invitationEntry}
         demoAvailable={demoAvailable}
         messagingAvailable={messagingAvailable}
+        sandboxPaymentsAvailable={sandboxPaymentsAvailable}
       />
     </ToastProvider>
   );
@@ -42,10 +45,12 @@ function AccountContent({
   invitationEntry,
   demoAvailable,
   messagingAvailable,
+  sandboxPaymentsAvailable,
 }: {
   invitationEntry: boolean;
   demoAvailable: boolean;
   messagingAvailable: boolean;
+  sandboxPaymentsAvailable: boolean;
 }) {
   const [state, setState] = useState<IdentityState | null>(null);
   const [authOpen, setAuthOpen] = useState(invitationEntry);
@@ -312,6 +317,7 @@ function AccountContent({
         onSignOut={signOut}
         onSecurity={() => setSecurityOpen(true)}
         messagingAvailable={messagingAvailable}
+        sandboxPaymentsAvailable={sandboxPaymentsAvailable}
         onMessages={() => {
           setSelectedDraftId(undefined);
           setMessagesOpen(true);

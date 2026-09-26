@@ -71,6 +71,33 @@ export function serviceConfiguration(service, config, platform = process.env) {
     ),
   );
   const allowed = ['DATABASE_URL', 'APP_MODE'];
+  if (service.startsWith('web-') && config.NATURAL_SANDBOX_ENABLED === 'true') {
+    // Explicit sandbox-only exception for synthetic onboarding. No payment worker is enabled.
+    const provisioning = config.NATURAL_PROVISIONING_API_KEY || config.NATURAL_API_KEY;
+    if (
+      !['beta', 'demo'].includes(config.APP_MODE) ||
+      config.NATURAL_ENVIRONMENT !== 'sandbox' ||
+      !/^sk_ntl_sandbox_[A-Za-z0-9_-]{1,512}$/.test(provisioning ?? '') ||
+      !/^ak_ntl_sandbox_[A-Za-z0-9_-]{1,512}$/.test(config.NATURAL_AGENT_KEY ?? '') ||
+      !/^agt_[0-9a-f]{32}$/.test(config.NATURAL_AGENT_ID ?? '') ||
+      !/^pty_[0-9a-f]{32}$/.test(config.NATURAL_PLATFORM_PARTY_ID ?? '') ||
+      (config.NATURAL_API_KEY &&
+        config.NATURAL_PROVISIONING_API_KEY &&
+        config.NATURAL_API_KEY !== config.NATURAL_PROVISIONING_API_KEY) ||
+      (config.NATURAL_API_BASE_URL &&
+        config.NATURAL_API_BASE_URL !== 'https://api.sandbox.natural.com')
+    )
+      throw new Error('Natural test accounts require complete sandbox configuration.');
+    allowed.push(
+      'NATURAL_SANDBOX_ENABLED',
+      'NATURAL_ENVIRONMENT',
+      'NATURAL_API_KEY',
+      'NATURAL_PROVISIONING_API_KEY',
+      'NATURAL_AGENT_KEY',
+      'NATURAL_AGENT_ID',
+      'NATURAL_PLATFORM_PARTY_ID',
+    );
+  }
   if (service.startsWith('web-') || service === 'messaging-worker')
     allowed.push('SENDBLUE_API_KEY_ID', 'SENDBLUE_API_SECRET_KEY', 'IDENTITY_ENCRYPTION_KEY');
   if (!preview && (service.startsWith('web-') || service === 'messaging-worker'))

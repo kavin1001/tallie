@@ -1,5 +1,11 @@
 # Project continuity
 
+## Current release gate
+
+The founder requires local testing before releasing the Natural integration. Keep Natural changes local; do not push or deploy them to production until the founder has tested locally and approved release. The existing hosted phone-demo release is separate from this work.
+
+## Documentation
+
 - Start with `docs/README.md` and `docs/technical/implementation-tracker.md`; read the PRD and technical-design sections relevant to the current task.
 - After meaningful implementation milestones, update the tracker with completed changes, test evidence, unresolved issues, and the next concrete action. Record material design changes in the technical design and decision log.
 - Before an explicit handoff or manual compaction, save current work state in those files so the next session can continue without depending on the transcript. Do not assume automatic compaction provides a pre-compaction editing opportunity.

@@ -24,6 +24,8 @@
     "@tallie/identity": "*",
     "@tallie/social": "*",
     "@tallie/messaging": "*",
-    "@tallie/app-services": "*"
+    "@tallie/app-services": "*",
+    "@tallie/natural": "*",
+    "@tallie/payments": "*"
   }
 }

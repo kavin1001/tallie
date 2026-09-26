@@ -24,6 +24,7 @@ import { Flower, Wordmark } from './brand';
 import { NewSplit } from './new-split';
 import { AddFriend, InvitationSheet, type InviteContext } from './account/friends';
 import { AccountExpense } from './account/expense';
+import { PaymentsSandbox } from './account/payments-sandbox';
 import './account-home.css';
 
 type Page = 'home' | 'people' | 'activity';
@@ -47,6 +48,7 @@ export function AccountHome({
   onSecurity,
   onMessages,
   messagingAvailable = false,
+  sandboxPaymentsAvailable = false,
   initialExpenseId,
   initialReceiptId,
   initialMessageDraft,
@@ -56,6 +58,7 @@ export function AccountHome({
   onSecurity: () => void;
   onMessages: () => void;
   messagingAvailable?: boolean;
+  sandboxPaymentsAvailable?: boolean;
   initialExpenseId?: string;
   initialReceiptId?: string;
   initialMessageDraft?: MessageDraft;
@@ -347,6 +350,7 @@ export function AccountHome({
                     <span aria-hidden="true">✳</span> Splits are saved. Payments will open once our
                     payment partner is ready.
                   </p>
+                  {sandboxPaymentsAvailable && <PaymentsSandbox />}
                   <section className="account-section">
                     <div className="account-section-heading">
                       <h2>Recent moments</h2>

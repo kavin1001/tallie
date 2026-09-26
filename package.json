@@ -14,7 +14,7 @@
     "dev": "concurrently --kill-others-on-fail -n web,worker,receipts,messages -c green,cyan,magenta,yellow \"node scripts/run-service.mjs web-dev\" \"npm run worker\" \"npm run receipt-worker\" \"npm run messaging-worker\"",
     "worker": "node scripts/run-service.mjs core-worker",
     "build": "npm run build -w @tallie/web",
-    "typecheck": "npm run typegen -w @tallie/web && tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p packages/domain/tsconfig.json && tsc --noEmit -p packages/db/tsconfig.json && tsc --noEmit -p apps/worker/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json && tsc --noEmit -p packages/receipts/tsconfig.json && tsc --noEmit -p packages/channels/tsconfig.json && tsc --noEmit -p apps/receipt-worker/tsconfig.json && tsc --noEmit -p packages/identity/tsconfig.json && tsc --noEmit -p packages/social/tsconfig.json && tsc --noEmit -p packages/messaging/tsconfig.json && tsc --noEmit -p packages/app-services/tsconfig.json && tsc --noEmit -p apps/messaging-worker/tsconfig.json",
+    "typecheck": "npm run typegen -w @tallie/web && tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p packages/domain/tsconfig.json && tsc --noEmit -p packages/db/tsconfig.json && tsc --noEmit -p apps/worker/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json && tsc --noEmit -p packages/receipts/tsconfig.json && tsc --noEmit -p packages/channels/tsconfig.json && tsc --noEmit -p apps/receipt-worker/tsconfig.json && tsc --noEmit -p packages/identity/tsconfig.json && tsc --noEmit -p packages/social/tsconfig.json && tsc --noEmit -p packages/messaging/tsconfig.json && tsc --noEmit -p packages/app-services/tsconfig.json && tsc --noEmit -p apps/messaging-worker/tsconfig.json && tsc --noEmit -p packages/natural/tsconfig.json && tsc --noEmit -p packages/payments/tsconfig.json",
     "test": "vitest run",
     "db:up": "docker compose up -d --wait",
     "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/migrate.ts",
@@ -25,7 +25,8 @@
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,json}\" \"scripts/*.{ts,mjs}\" \"*.{json,ts,yaml}\" \".github/**/*.yml\"",
     "start": "concurrently --kill-others-on-fail -n web,worker,receipts,messages -c green,cyan,magenta,yellow \"node scripts/run-service.mjs web-start\" \"npm run worker\" \"npm run receipt-worker\" \"npm run messaging-worker\"",
     "receipt-worker": "node scripts/run-service.mjs receipt-worker",
-    "messaging-worker": "node scripts/run-service.mjs messaging-worker"
+    "messaging-worker": "node scripts/run-service.mjs messaging-worker",
+    "natural:check": "tsx --env-file-if-exists=.env scripts/natural-check.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

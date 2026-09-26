@@ -9,6 +9,8 @@ const config: NextConfig = {
     '@tallie/social',
     '@tallie/messaging',
     '@tallie/app-services',
+    '@tallie/natural',
+    '@tallie/payments',
   ],
   poweredByHeader: false,
   devIndicators: false,

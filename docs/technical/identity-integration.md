@@ -30,7 +30,7 @@ On initial load, the client resumes an active signup challenge or unfinished acc
 
 Back leaves the signup screen without revoking the restricted session; the landing action becomes **Finish setting up**. Explicit sign-out from an established account retains its existing revocation behavior. Unconsumed proof expiry returns to phone entry, and a registration freshness rejection gives a direct re-verification path. These changes do not lengthen proof/session authority or grant private access before passkey enrollment.
 
-The first live retry confirmed phone proof but exposed a draft whose session had already been lost before this repair. Read-only account metadata confirmed it had no credentials or product activity. This remains blocked pending an explicitly approved, narrowly scoped operator reset of that empty draft; no phone-only recovery endpoint or restored session token is introduced. Such a reset must recheck credentials and all account references in the same short transaction, preserve historical signup/rate-limit evidence, and refuse a changed or non-empty account. It does not establish a recovery policy for accounts with activity.
+The first live retry confirmed phone proof but exposed a draft whose session had already been lost before this repair. Read-only account metadata confirmed it had no credentials or product activity. The founder subsequently approved a narrowly scoped reset of that empty draft; no established-account recovery override or restored session token was introduced. Such a reset must recheck credentials and all account references in the same short transaction, preserve historical signup/rate-limit evidence, and refuse a changed or non-empty account. It does not establish a recovery policy for accounts with activity.
 
 ## Temporary phone-only demo
 
@@ -42,7 +42,7 @@ Demo assurance permits manual-split collaboration only while enabled. Social mut
 
 The tradeoff is weaker phone-possession assurance, including number reassignment risk, accepted for consenting demo testers. Disabling the flag removes private demo access. Users with their existing demo session can reverify through ordinary signup and enroll a passkey, preserving identity and clearing the marker. Users who lost that session need a planned transition/support process before the mode is disabled. Existing passkey identities do not inherit phone-only login.
 
-The founder approved and received a one-time reset of the previously diagnosed empty signup, superseding the pending-reset note above; proof/rate-limit history was preserved and database networking restored. The new mode is independently implemented and is not a recovery override for established accounts. **35 identity tests, 27 social tests and the full 314-test suite passed**, plus local synthetic browser flows. Hosted completion remains a separate check.
+The founder approved and received a one-time reset of the previously diagnosed empty signup, proof/rate-limit history was preserved and database networking restored. The new mode is independently implemented and is not a recovery override for established accounts. **35 identity tests, 27 social tests and the full 314-test suite passed**, plus local synthetic browser flows. Hosted completion remains a separate check.
 
 ## Messages channel proof
 

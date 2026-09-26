@@ -1,10 +1,10 @@
 # Natural technical contract audit
 
-**Reviewed:** 2026-09-25. **Scope:** public documentation and downloaded OpenAPI, read-only. No authenticated sandbox or production call was made. Public contract assertions passed; this is not evidence of runtime compatibility, consumer-program eligibility, or actual settlement.
+**Reviewed:** 2026-09-26. **Scope:** public documentation and downloaded OpenAPI, read-only. No authenticated sandbox or production call was made. Public contract assertions passed; this is not evidence of runtime compatibility, consumer-program eligibility, or actual settlement.
 
 ## Evidence and confidence
 
-The current [OpenAPI](https://docs.natural.com/api-reference/openapi.json) reports OpenAPI 3.1.1. The downloaded bytes had SHA-256 `ca3882d75a009fcdcffecd1736237a6ccc9fb29113145df345c539b0fa63c32e`. Eighteen read-only assertions checked request actor/source fields, positive integer amounts, immutable fulfillment amount, request/payment/connection states, required idempotency headers, connected-event configuration, event-history filtering, missing unsupported source/filter fields, and REST version/timestamp fields. All passed. Reproduce with the [contract checker](../technical/verification/check_natural_contract.py); the [recorded result](../technical/verification/natural-contract-results.json) includes the hash and timestamp. Record a fresh schema hash and repeat contract checks when implementation starts; docs can change.
+The current [OpenAPI](https://docs.natural.com/api-reference/openapi.json) reports OpenAPI 3.1.1. The downloaded bytes had SHA-256 `ca3882d75a009fcdcffecd1736237a6ccc9fb29113145df345c539b0fa63c32e`. Eighteen read-only assertions checked request actor/source fields, positive integer amounts, immutable fulfillment amount, request/payment/connection states, required idempotency headers, connected-event configuration, event-history filtering, missing unsupported source/filter fields, and REST version/timestamp fields. All passed. Reproduce with the [contract checker](../technical/verification/check_natural_contract.py); the [recorded result](../technical/verification/natural-contract-results.json) includes the hash and timestamp. The September 26 implementation refresh downloaded the same 12,330,047-byte schema: the hash is unchanged and all eighteen assertions still pass. The ignored working copy is `.tallie/natural/openapi.json`. This refresh also inspected relevant prose guides and schema branches beyond the original eighteen assertions; those findings below are documentation review, not additional automated checks.
 
 **Confidence labels used here:** “documented” means primary public sources; “design” means our recommended implementation; “unverified” means sandbox evidence or provider confirmation is still required.
 
@@ -18,7 +18,9 @@ An agent key binds a specific agent. A party API key acts as the party, without 
 
 ### Connect account binding
 
-Targeted invitations support a phone/email recipient, agents and permissions, and `redirectUrl`; acceptance records the connected customer. Shareable invitations can admit multiple customers. A redirect is navigation, not proof of connection. The targeted invitation ID plus its authenticated acceptance resource is the strongest documented correlation path for a specific app user. Use a server-owned onboarding session and nonce in the return URL, then fetch the accepted invitation/customer. Never attach an arbitrary newly listed customer to the most recently active signup. Reaccepting an old offer does not enlarge permissions. [Invite customer](https://docs.natural.com/guides/connect/invite-customer).
+Targeted invitations support phone/email recipients, agents, permissions, and `redirectUrl`. A redirect is navigation, not proof of connection. Persist the invitation ID with the exact app account, intended recipient, and configured agent before offering its URL. Production phone invitations return a URL for Tallie to deliver; Natural sends email invitations itself. Reaccepting an old offer does not enlarge permissions. [Invite customer](https://docs.natural.com/guides/connect/invite-customer).
+
+**September 26 correction:** the public API has no `GET /customers/invitations/{invitationId}`; that path supports deletion only. `GET /customers/invitations` lists pending grouped records and cannot be treated as an accepted-invitation lookup. Reconcile the stored invitation using an authenticated acceptance event and then `GET /customers/{customerId}`. The event snapshot contains `invitationId`, `agentId`, `delegateePartyId` (platform), and `delegatorPartyId` (customer). Validate every binding and the current customer/agent authorization before activation. Never attach an arbitrary listed customer to the latest signup. [Event catalog](https://docs.natural.com/api-reference/event-catalog), [public schema](https://docs.natural.com/api-reference/openapi.json).
 
 **Unverified:** exact minimal permission set, invitation delivery behavior, consumer KYC eligibility, how an invitation's accepted financial identity is tied to our verified phone identity, and whether the desired onboarding presentation can be embedded. Test interrupted signup, shared/forwarded invitation, accepted invitation in the wrong app session, revoked access, and reconnect with a fresh offer.
 
@@ -147,3 +149,58 @@ These are our design requirements, not additional claims about Natural:
 | Revocation and outage | Access loss preserves unresolved money; event-history recovery and endpoint-disable alerts work |
 
 Until these have evidence, mocks are useful for product work but live payment paths remain disabled.
+
+
+## 8. September 26 implementation contract refresh
+
+### Fixed environments and credential roles
+
+| Item | Verified public contract | Implementation consequence |
+|---|---|---|
+| Sandbox origin | `https://api.sandbox.natural.com` | Set explicitly; the current OpenAPI `servers` contains only production. |
+| Production origin | `https://api.natural.com` | Do not infer environment from a user-supplied URL. |
+| Party key | `sk_ntl_sandbox_…` / `sk_ntl_prod_…` | Provisioning/admin credential; never expose to the browser. |
+| Agent key | `ak_ntl_sandbox_…` / `ak_ntl_prod_…` | Bound to one agent; use for delegated customer operations. |
+| Identity probe | `GET /parties/me` → `data.id`, `type: party`, `attributes.status` | Read-only environment/key diagnosis; do not log the returned identity/contact/address object. |
+| Agent attribution | `X-Instance-ID`, maximum 1024 characters | Required for agent money mutations even where schema says optional; immutable per logical operation. |
+
+Environment prefixes are documented, not sufficient proof of scopes or program approval. A successful identity probe does not prove delegation, funding, or consumer-P2P eligibility. [Authentication](https://docs.natural.com/api-reference/authentication), [Sandbox](https://docs.natural.com/api-reference/sandbox/overview).
+
+No credential-self endpoint in the reviewed public schema proves which agent an already-supplied secret belongs to. `GET /parties/me` identifies the party only, and reading an agent resource does not prove credential binding. Admin `GET /agent-keys?agentId=…` exposes non-secret prefixes and agent relationships as an operational cross-check; prefix uniqueness is not documented. Controlled agent-key provisioning provides the authoritative secret/agent association in its creation response. Preserve that association securely without putting administrative credentials in runtime; externally supplied key/agent pairs remain configured rather than verified until checked. [Public schema](https://docs.natural.com/api-reference/openapi.json).
+
+### Onboarding and fixture creation are different contracts
+
+Production `POST /customers/invitations` returns `201` with `data: agentDelegationInvitation[]` and mandatory `meta.failedRecipients` / `meta.alreadyConnected` arrays. One recipient can succeed while another fails. An existing connection does not receive newly requested permissions. Use one server-resolved recipient and one configured agent for Tallie's initial targeted flow. IDs use a resource prefix followed by 32 lowercase hexadecimal characters. Response relationships identify the agent and, once accepted, the customer party; pending customer-party relationships are nullable.
+
+This invitation endpoint does **not** declare an idempotency header, and Natural documents that endpoints outside its idempotency list ignore the header. An ambiguous invitation submission therefore needs reconciliation/operator handling; blindly retrying with a locally stable key is insufficient. The same warning applies to any newly added non-idempotent provisioning endpoint. [Public schema](https://docs.natural.com/api-reference/openapi.json), [idempotency](https://docs.natural.com/api-reference/idempotency).
+
+Sandbox email/phone invitations are explicitly unsupported. The fixture sequence is:
+
+1. `POST /simulations/invite-customer` with `data.attributes.agentIds`, optional `permissions`, `type: PERSON`, and `redirectUrl`. A required `Idempotency-Key` protects creation. The `200` response includes invitation resources and `meta.customer.partyId`.
+2. `POST /simulations/customer-invitations/{invitationId}/accept` with `data.attributes.partyId` and its own stable idempotency key. The response is the accepted invitation, allowing exact fixture correlation.
+3. Read `GET /customers/{customerId}` and the customer's wallets. Check active parent delegation and the intended active agent with the required permissions.
+4. For a named test fixture, `POST /simulations/customers/{customerId}/transfers/deposit` accepts positive integer `amount`, optional `currency: USD`, optional exact `walletId`, and a required idempotency key.
+
+This is synthetic provider-side testing, not consumer KYC evidence. The documented bank-link simulation has no customer parameter and links to the calling party. Customer-bank repayment remains a separate fixture/support question. [Sandbox](https://docs.natural.com/api-reference/sandbox/overview), [public schema](https://docs.natural.com/api-reference/openapi.json).
+
+### Read validation and response minimization
+
+- `GET /wallets` and `GET /wallets/{walletId}` support `customerPartyId`; validate `relationships.party.data.id`. Status is lowercase `active | frozen | closed`, wallet type is `standard | vault`, and `balance` may be null. `agentDefault` is optional and differs from the party's `isDefault`. Only active, explicitly selected, authorized standard wallets qualify for the initial payment path. Return a minimal app DTO; wallet responses can also contain full deposit instructions.
+- `GET /external-accounts` and its detail route support customer context. The list is cursor-paginated. Validate owner relationship, lifecycle status, and separate connection health. `availableMethods` describes withdrawal methods, not debit eligibility. Customer reads require the connected agent's `wallets.read` permission.
+- `GET /customers/{customerId}` returns the parent delegation plus connected agents. Parent `ACTIVE` alone is insufficient; inspect the configured agent's status/permissions too. Do not use the customer display name or email as identity proof.
+
+These fields are documented in the [public schema](https://docs.natural.com/api-reference/openapi.json); availability and granted-source behavior still need sandbox verification.
+
+### Mutation normalization and reconciliation
+
+`POST /payment-requests` accepts an optional `description` of at most 80 characters and returns `201` with one `paymentRequest`; fulfill and cancel return `200`. Fulfill produces a `payment`, not an updated request. The create response has only `requesterParty`, nullable `payerParty`, and nullable `payerAgent` relationships. The detail/cancel response additionally supplies `wallet` and nullable `payment`; do not require those fields in the create response or pretend the create response verifies the receiving wallet. Payment resources instead expose nullable `sender`, `recipient`, `paymentRequest`, and agent/transaction relationships. Use these distinct schemas and validate available actor/amount/request evidence, then obtain detail evidence where required. A malformed success after a dispatched mutation is an unknown outcome, never permission to create a replacement.
+
+All three request mutations require `Idempotency-Key` (maximum 255 characters). `X-Idempotency-Replayed: true` distinguishes replay. Both an in-progress original and changed-payload reuse return the same `409 conflict` body; the local immutable payload decides how to interpret it. Errors are `{errors:[{code, detail, status, meta:{supportId}}]}`; `status` is a string. `429` supplies `Retry-After`; retryable transport errors retain the same operation/key. Provider error messages and support IDs should be captured selectively, not by logging SDK requests, headers, raw bodies or keys. [Idempotency](https://docs.natural.com/api-reference/idempotency), [error handling](https://docs.natural.com/api-reference/errors/error-handling).
+
+### Webhook and event-history normalization
+
+The Standard Webhooks signed content is the exact `webhook-id.webhook-timestamp.body` byte sequence. Use the vetted `standardwebhooks` verifier with a `whsec_` secret and bounded timestamp tolerance; accept valid overlapping signatures. Additionally match the verified body's event ID to `webhook-id`. Store only after signature validation, then acknowledge after the inbox transaction commits. Local duplicate identity is environment plus event ID; divergent payload bytes for an already-seen ID need investigation.
+
+Acceptance identity events are delivered directly to both parties; they do not require a connected copy. Financial events still require subscriptions with `sources: ["own", "connected"]` and current matching grants. REST event history wraps snapshots at `data[].attributes.payload.object`, unlike direct webhook `data.object`; normalize deliberately. History can recover acceptance evidence while a public callback is unavailable, but production binding still needs the wrong-recipient/forwarded-link tests. [Receive events](https://docs.natural.com/guides/webhooks/receive-events), [events schema](https://docs.natural.com/api-reference/events/list-events).
+
+**Evidence boundary:** the refresh performed only unauthenticated public GETs and local schema checks. No keys were read, no customer/agent/webhook was created, and no provider payment was executed.

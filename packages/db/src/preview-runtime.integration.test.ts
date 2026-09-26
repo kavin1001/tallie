@@ -142,6 +142,42 @@ describe('free preview runtime boundaries', () => {
       ).toBe('false');
   });
 
+  it('passes sandbox credentials only to explicitly enabled web roles and rejects production credentials', () => {
+    const sandbox = {
+      ...configuration,
+      NATURAL_SANDBOX_ENABLED: 'true',
+      NATURAL_ENVIRONMENT: 'sandbox',
+      NATURAL_API_KEY: 'sk_ntl_sandbox_synthetic_only',
+      NATURAL_AGENT_KEY: 'ak_ntl_sandbox_synthetic_only',
+      NATURAL_AGENT_ID: `agt_${'1'.repeat(32)}`,
+      NATURAL_PLATFORM_PARTY_ID: `pty_${'2'.repeat(32)}`,
+    };
+    for (const role of ['web-preview', 'web-dev', 'web-start']) {
+      const runtime = serviceConfiguration(role, sandbox, platform).environment;
+      expect(runtime.NATURAL_API_KEY).toBe(sandbox.NATURAL_API_KEY);
+      expect(runtime.NATURAL_AGENT_KEY).toBe(sandbox.NATURAL_AGENT_KEY);
+      expect(runtime.NATURAL_SANDBOX_ENABLED).toBe('true');
+      for (const patch of [
+        { NATURAL_API_KEY: 'sk_ntl_prod_synthetic_only' },
+        { NATURAL_AGENT_KEY: 'ak_ntl_prod_synthetic_only' },
+        { NATURAL_ENVIRONMENT: 'production' },
+        { NATURAL_AGENT_ID: '' },
+        { NATURAL_API_BASE_URL: 'https://api.natural.com' },
+      ])
+        expect(() => serviceConfiguration(role, { ...sandbox, ...patch }, platform)).toThrow();
+    }
+    for (const role of ['core-worker', 'receipt-worker', 'messaging-worker']) {
+      const runtime = serviceConfiguration(role, sandbox, { ...platform, ...sandbox }).environment;
+      expect(Object.keys(runtime).filter((key) => key.startsWith('NATURAL_'))).toEqual([]);
+    }
+    const disabled = serviceConfiguration(
+      'web-preview',
+      { ...sandbox, NATURAL_SANDBOX_ENABLED: 'false' },
+      { ...platform, ...sandbox },
+    ).environment;
+    expect(Object.keys(disabled).filter((key) => key.startsWith('NATURAL_'))).toEqual([]);
+  });
+
   it('never starts serving after a failed migration and closes its database', async () => {
     const launchWeb = vi.fn(() => childProcess());
     const close = vi.fn(async () => {});

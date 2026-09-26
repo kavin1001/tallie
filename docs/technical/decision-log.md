@@ -6,6 +6,18 @@
 
 ## Decisions
 
+## ADR-027 — Durable synthetic sandbox setup before real payment activation
+
+**Date:** September 26, 2026. **Authority:** founder obtained a Natural key and requested implementation. **Status:** implemented locally; authenticated sandbox verification pending. **Scope:** sandbox account creation, balances and provider client.
+
+**Decision:** create one synthetic PERSON per explicitly consenting Tallie account through Natural's simulation invite/accept endpoints. Persist the expected platform/agent/read permissions and stable keys before external calls. Use short leases with generation fencing; calls never hold SQL locks. Treat transport/409/malformed mutation outcomes as unknown, retain operation identities, and stop mutation retries after 24 hours. Current delegation and exact owned wallets are checked before storing refreshed balances. Browser sees local UUIDs and clearly labeled test amounts only; null is unavailable.
+
+**Authentication:** ordinary account session checks apply. The temporary marked phone-demo identity can create/read only synthetic sandbox accounts under its existing triple gate. This exception grants no real-payment authority. Provider keys must be sandbox-specific and the base is fixed; one literal opt-in controls the UI and web credential forwarding. Default remains disabled.
+
+**Tradeoffs:** production phone/email invitations do not share the sandbox simulation contract, and production invitation creation has no documented idempotency guarantee. Do not generalize this service into production enrollment. The free web role holds separate provisioning and agent clients, avoiding a new paid worker; process/DB privilege isolation remains a production milestone. Credentials alone do not establish P2P approval or agent-key association. The provider transport implements money endpoints for the next milestone, but current read-only delegations and account routes cannot execute them.
+
+**Next:** verify actual sandbox credentials/agent binding and run the explicit test-account flow. Then implement immutable user review, real-account obligation lanes, durable dispatch, signed webhook inbox and reconciliation before activating request settlement. Verify fees, funding and return behavior independently.
+
 ## ADR-026 — Temporary phone-only manual-split preview
 
 **Date:** September 26, 2026. **Authority:** explicit founder request to remove required passkeys for the demo. **Status:** locally implemented and tested; deployment evidence tracked separately. This narrowly qualifies ADR-021 for marked preview accounts.
