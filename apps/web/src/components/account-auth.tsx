@@ -37,6 +37,9 @@ export function AccountAuth({
   const [error, setError] = useState('');
   const [uncertain, setUncertain] = useState(false);
   const [now, setNow] = useState(Date.now);
+  const [demoNameRequired, setDemoNameRequired] = useState(false);
+  const demoCompletionAttempt = useRef<string | null>(null);
+  const phoneDemo = state.authenticationMode === 'phone_demo' && !recovery;
   const lock = useRef(false);
   const active = useRef(true);
   const attempt = useRef<{ phone: string; key: string } | null>(null);
@@ -71,6 +74,69 @@ export function AccountAuth({
 
   const step = signupStep(state, resumePhone, now);
   const pending = step === 'verification';
+
+  async function completeDemo(withName: boolean) {
+    if (!challenge) return;
+    await run('complete', async () => {
+      try {
+        const result = await api<SignupComplete>(
+          '/api/identity/phone-demo/complete',
+          { challengeId: challenge.id, ...(withName ? { name: name.trim() } : {}) },
+          undefined,
+          undefined,
+          state.account?.id,
+        );
+        if (active.current)
+          onStateRef.current({ ...state, account: result.account, challenge: null });
+      } catch (e) {
+        if (!active.current) return;
+        if (e instanceof RequestError && e.code === 'NAME_REQUIRED') {
+          setDemoNameRequired(true);
+          return;
+        }
+        if (
+          e instanceof RequestError &&
+          e.code === 'IDEMPOTENCY_CONFLICT' &&
+          challenge.status === 'complete'
+        ) {
+          setDemoNameRequired(true);
+          throw new Error('Enter the same name you used to finish this signup.');
+        }
+        if (e instanceof RequestError && e.code === 'ACCOUNT_RECOVERY_REQUIRED') {
+          setRecovery(true);
+          throw new Error(
+            'This account uses a passkey. Sign in with it, or use a saved recovery code.',
+          );
+        }
+        if (e instanceof RequestError && e.code === 'PHONE_PROOF_REQUIRED') {
+          await refresh();
+          throw new Error('That verification has expired. Verify your number again to continue.');
+        }
+        if (e instanceof RequestError && e.code === 'AUTH_REQUIRED') {
+          startAgain();
+          throw new Error('Verify your number again to sign in.');
+        }
+        throw e;
+      }
+    });
+  }
+  // A verified returning demo user can enter directly. New users are asked for a name once.
+  const demoCompleteRef = useRef(completeDemo);
+  demoCompleteRef.current = completeDemo;
+  useEffect(() => {
+    if (
+      !phoneDemo ||
+      step !== 'details' ||
+      !challenge ||
+      busy ||
+      demoCompletionAttempt.current === challenge.id
+    )
+      return;
+    if (challenge.status === 'complete' && challenge.completionMode !== 'phone_demo') return;
+    demoCompletionAttempt.current = challenge.id;
+    setDemoNameRequired(false);
+    void demoCompleteRef.current(false);
+  }, [phoneDemo, step, challenge, busy]);
   useEffect(() => {
     if (!pending || !challenge || busy) return;
     const abort = new AbortController();
@@ -142,6 +208,7 @@ export function AccountAuth({
   async function complete(event: FormEvent) {
     event.preventDefault();
     if (!challenge) return;
+    if (phoneDemo) return completeDemo(true);
     await run('complete', async () => {
       try {
         const result = await api<SignupComplete>(
@@ -199,6 +266,8 @@ export function AccountAuth({
     attempt.current = null;
     setUncertain(false);
     setError('');
+    setDemoNameRequired(false);
+    demoCompletionAttempt.current = null;
     onStateRef.current({ ...state, challenge: null });
   }
 
@@ -266,6 +335,31 @@ export function AccountAuth({
                 Need to verify your number again?
               </button>
             </>
+          ) : step === 'details' && phoneDemo && !demoNameRequired ? (
+            <>
+              <div className="account-auth-symbol">
+                <Check size={28} />
+              </div>
+              <h1>
+                Your number.
+                <br />
+                <em>Your Tallie.</em>
+              </h1>
+              <p role="status">
+                {busy
+                  ? 'Getting your good times together…'
+                  : 'Your number checks out. You’re nearly there.'}
+              </p>
+              <Button
+                size="lg"
+                fullWidth
+                loading={busy === 'complete'}
+                disabled={Boolean(busy)}
+                onClick={() => void completeDemo(false)}
+              >
+                Continue to Tallie <ArrowRight size={17} />
+              </Button>
+            </>
           ) : step === 'details' ? (
             <>
               <div className="account-auth-symbol">
@@ -304,14 +398,16 @@ export function AccountAuth({
                   {recovery ? 'Restore my account' : 'Make myself at home'} <ArrowRight size={17} />
                 </Button>
               </form>
-              <button
-                type="button"
-                className="text-action"
-                onClick={() => void passkeySignIn()}
-                disabled={Boolean(busy)}
-              >
-                Already have a passkey? Sign in
-              </button>
+              {!phoneDemo && (
+                <button
+                  type="button"
+                  className="text-action"
+                  onClick={() => void passkeySignIn()}
+                  disabled={Boolean(busy)}
+                >
+                  Already have a passkey? Sign in
+                </button>
+              )}
             </>
           ) : pending ? (
             <>
@@ -390,7 +486,9 @@ export function AccountAuth({
               </h1>
               <p>
                 {unfinishedAccount
-                  ? 'Your name is saved. Verify the same mobile number again, then create your passkey.'
+                  ? phoneDemo
+                    ? 'Verify your mobile number to finish setting up.'
+                    : 'Your name is saved. Verify the same mobile number again, then create your passkey.'
                   : recovery
                     ? 'First, verify your number. Then use a saved recovery code.'
                     : 'We’ll handle the little things. Start with your mobile number.'}
@@ -434,31 +532,47 @@ export function AccountAuth({
               <p className="fine-print">
                 You’ll send a short code to verify your number. Standard messaging rates may apply.
               </p>
-              <div className="account-auth-divider">
-                <span />
-                ALREADY HERE?
-                <span />
-              </div>
-              <Button
-                variant="secondary"
-                fullWidth
-                onClick={() => void passkeySignIn()}
-                loading={busy === 'passkey'}
-                disabled={Boolean(busy)}
-              >
-                Sign in with a passkey <Fingerprint size={18} />
-              </Button>
-              <button
-                type="button"
-                className="text-action"
-                disabled={Boolean(busy)}
-                onClick={() => {
-                  setRecovery(!recovery);
-                  setError('');
-                }}
-              >
-                {recovery ? 'Back to creating an account' : 'Need help getting back in?'}
-              </button>
+              {phoneDemo ? (
+                <>
+                  <p className="fine-print">Already here? Use the same number to sign back in.</p>
+                  <button
+                    type="button"
+                    className="text-action"
+                    disabled={Boolean(busy)}
+                    onClick={() => void passkeySignIn()}
+                  >
+                    Use a saved passkey
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="account-auth-divider">
+                    <span />
+                    ALREADY HERE?
+                    <span />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => void passkeySignIn()}
+                    loading={busy === 'passkey'}
+                    disabled={Boolean(busy)}
+                  >
+                    Sign in with a passkey <Fingerprint size={18} />
+                  </Button>
+                  <button
+                    type="button"
+                    className="text-action"
+                    disabled={Boolean(busy)}
+                    onClick={() => {
+                      setRecovery(!recovery);
+                      setError('');
+                    }}
+                  >
+                    {recovery ? 'Back to creating an account' : 'Need help getting back in?'}
+                  </button>
+                </>
+              )}
             </>
           )}
           {error && (

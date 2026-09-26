@@ -25,12 +25,31 @@ const proof: SignupChallenge = {
 };
 const state = (patch: Partial<IdentityState> = {}): IdentityState => ({
   available: true,
+  authenticationMode: 'passkey',
   account: null,
   challenge: null,
   ...patch,
 });
 
 describe('interrupted signup routing', () => {
+  it('enters the app after phone demo completion without reopening enrollment', () => {
+    const signedIn = state({
+      authenticationMode: 'phone_demo',
+      account: { ...account, assurance: 'phone_demo', ready: true, enrollmentExpiresAt: null },
+      challenge: { ...proof, status: 'complete', completionMode: 'phone_demo' },
+    });
+    expect(shouldResumeSignup(signedIn, now)).toBe(false);
+  });
+
+  it('requires fresh verification when demo access is disabled for an existing session', () => {
+    const disabled = state({
+      authenticationMode: 'passkey',
+      account: { ...account, assurance: 'phone_demo', ready: false, enrollmentExpiresAt: null },
+    });
+    expect(shouldResumeSignup(disabled, now)).toBe(true);
+    expect(signupStep(disabled, false, now)).toBe('phone');
+  });
+
   it('returns a verified browser to its name form after reload', () => {
     const saved = state({ challenge: proof });
     expect(shouldResumeSignup(saved, now)).toBe(true);

@@ -18,6 +18,8 @@ services:
         value: production
       - key: APP_MODE
         value: beta
+      - key: IDENTITY_PHONE_DEMO_ENABLED
+        value: 'true'
       - key: APP_HOST
         value: 0.0.0.0
       # APP_ORIGIN is derived only from Render's trusted RENDER_EXTERNAL_URL.

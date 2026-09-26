@@ -12,6 +12,7 @@ export interface IdentityDatabase {
     image: Generated<string | null>;
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
+    phone_demo: Generated<boolean>;
   };
   auth_session: {
     id: string;
@@ -22,7 +23,7 @@ export interface IdentityDatabase {
     updated_at: Generated<Date>;
     ip_address: Generated<string | null>;
     user_agent: Generated<string | null>;
-    assurance_kind: Generated<'onboarding' | 'passkey' | 'recovery'>;
+    assurance_kind: Generated<'onboarding' | 'passkey' | 'recovery' | 'phone_demo'>;
     assurance_at: Generated<Date | null>;
     phone_verified_at: Generated<Date | null>;
   };

@@ -4,6 +4,16 @@ Updated September 26, 2026. **The free preview is live at [tallie-web.onrender.c
 
 ## Authorized first deployment: $0 preview
 
+### Temporary phone-only authentication (ADR-026)
+
+The founder requested removing required passkeys for this manual-split demo. Set `IDENTITY_PHONE_DEMO_ENABLED=true` on the free web service; `web-preview` injects `APP_PREVIEW_MODE=true` and requires `APP_MODE=beta`. The launcher strips these permissions from other roles. Migration012 adds separate demo account/session markers without converting existing passkey accounts. New users verify and supply a name; returning demo users verify again. A quiet saved-passkey fallback remains for existing strong accounts.
+
+To disable, set the identity flag to `false` and deploy. Demo sessions immediately lose private access. Plan migration first: users retaining their demo session can reverify through ordinary signup and enroll a passkey; users without that session need a transition/support process. No migration rollback or account deletion is required to switch the flag. This mode does not enable receipts, ordinary messaging, simulator routes or real payments.
+
+Local release checks: **314 tests**, formatting, all-workspace TypeScript and production build; synthetic browser checks cover signup, returning login, settings, logout/reload and revoked completion. Hosted release verification is recorded in the tracker. The founder-approved empty-draft reset ran before this migration, preserved proof/rate-limit evidence, and restored the database's blocked public networking.
+
+### Infrastructure
+
 The founder authorized private `kavin1001/tallie`, Render hosting with a temporary Render address, and private AWS storage within a strict $0 infrastructure budget. The default `render.yaml` selects a free web service and free PostgreSQL only. The original paid topology is retained in `deploy/render-paid.yaml`; applying that file is outside the current authorization.
 
 - **Available:** phone signup, passkeys, recovery, contacts, private invitations and manually entered equal/custom/item splits.

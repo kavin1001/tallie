@@ -102,6 +102,10 @@ export function serviceConfiguration(service, config, platform = process.env) {
     environment.RECEIPTS_ENABLED = 'false';
     environment.MESSAGING_SEND_ENABLED = 'false';
     environment.APP_HOST = config.APP_HOST || '0.0.0.0';
+    environment.APP_PREVIEW_MODE = 'true';
+    // This lower-assurance sign-in mode is available only in the manual-split preview.
+    environment.IDENTITY_PHONE_DEMO_ENABLED =
+      config.IDENTITY_PHONE_DEMO_ENABLED === 'true' ? 'true' : 'false';
   } else if (service !== 'core-worker') {
     environment.RECEIPTS_ENABLED =
       config.RECEIPTS_ENABLED ?? (config.OPENAI_API_KEY ? 'true' : 'false');

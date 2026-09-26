@@ -618,7 +618,12 @@ export function AccountHome({
           >
             <ShieldCheck size={19} />
             <span>
-              Sign-in & recovery<small>Passkeys, recovery codes, peace of mind.</small>
+              Sign-in & recovery
+              <small>
+                {account.assurance === 'phone_demo'
+                  ? 'Your verified mobile number.'
+                  : 'Passkeys, recovery codes, peace of mind.'}
+              </small>
             </span>
             <ChevronRight size={17} />
           </button>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Fingerprint, ShieldCheck, Trash2 } from 'lucide-react';
+import { Check, Fingerprint, MessageCircle, ShieldCheck, Trash2 } from 'lucide-react';
 import type { IdentityAccount } from '@tallie/identity/contracts';
 import { identityClient } from '@tallie/identity/client';
 import { errorMessage } from '@/lib/client';
@@ -10,15 +10,40 @@ import { Button, Dialog } from './ui';
 
 type Passkey = { id: string; name: string; createdAt: string | null };
 
-export function AccountSecurity({
-  account,
-  onClose,
-  onChanged,
-}: {
+type SecurityProps = {
   account: IdentityAccount;
   onClose: () => void;
   onChanged: () => Promise<void>;
-}) {
+};
+
+export function AccountSecurity(props: SecurityProps) {
+  if (props.account.assurance === 'phone_demo')
+    return (
+      <Dialog
+        open
+        onClose={props.onClose}
+        title="Your number. Your Tallie."
+        description="One familiar way back in."
+      >
+        <div className="account-security-row">
+          <MessageCircle size={24} />
+          <div>
+            <strong>{props.account.maskedPhone}</strong>
+            <p>Your verified mobile number is your sign-in for this demo.</p>
+          </div>
+        </div>
+        <p className="fine-print">
+          If you sign out, verify this same number to pick up where you left off.
+        </p>
+        <Button fullWidth onClick={props.onClose}>
+          All good <Check size={17} />
+        </Button>
+      </Dialog>
+    );
+  return <PasskeySecurity {...props} />;
+}
+
+function PasskeySecurity({ account, onClose, onChanged }: SecurityProps) {
   const api = useAccountApi();
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [removing, setRemoving] = useState<string | null>(null);

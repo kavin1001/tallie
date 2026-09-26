@@ -109,6 +109,39 @@ describe('free preview runtime boundaries', () => {
     ).not.toHaveProperty('BETTER_AUTH_SECRET');
   });
 
+  it('scopes phone-only authentication to an explicitly enabled preview role', () => {
+    const enabled = {
+      ...configuration,
+      APP_PREVIEW_MODE: 'true',
+      IDENTITY_PHONE_DEMO_ENABLED: 'true',
+    };
+    const inherited = { ...platform, ...enabled };
+    const preview = serviceConfiguration('web-preview', enabled, inherited).environment;
+    expect(preview.APP_PREVIEW_MODE).toBe('true');
+    expect(preview.IDENTITY_PHONE_DEMO_ENABLED).toBe('true');
+    expect(preview.RECEIPTS_ENABLED).toBe('false');
+    expect(preview.MESSAGING_SEND_ENABLED).toBe('false');
+    for (const role of [
+      'web-dev',
+      'web-start',
+      'core-worker',
+      'receipt-worker',
+      'messaging-worker',
+    ]) {
+      const environment = serviceConfiguration(role, enabled, inherited).environment;
+      expect(environment).not.toHaveProperty('APP_PREVIEW_MODE');
+      expect(environment).not.toHaveProperty('IDENTITY_PHONE_DEMO_ENABLED');
+    }
+    for (const value of [undefined, 'false', 'TRUE', '1'])
+      expect(
+        serviceConfiguration(
+          'web-preview',
+          { ...configuration, IDENTITY_PHONE_DEMO_ENABLED: value },
+          platform,
+        ).environment.IDENTITY_PHONE_DEMO_ENABLED,
+      ).toBe('false');
+  });
+
   it('never starts serving after a failed migration and closes its database', async () => {
     const launchWeb = vi.fn(() => childProcess());
     const close = vi.fn(async () => {});

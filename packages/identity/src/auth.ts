@@ -16,6 +16,7 @@ import { identityVault } from './crypto';
 import { IdentityError } from './errors';
 import { SignupService } from './signup';
 import type { AccountPrincipal, IdentityAccount } from './contracts';
+import { phoneDemoEnabled } from './config';
 
 export const SIGNUP_COOKIE = 'tallie_signup';
 const onboardingEnrollmentWindowMs = 10 * 60_000;
@@ -60,7 +61,14 @@ export async function accountForSession(
     .selectFrom('auth_session as s')
     .innerJoin('auth_user as u', 'u.id', 's.user_id')
     .innerJoin('identity_phone_bindings as p', 'p.user_id', 'u.id')
-    .select(['u.id', 'u.name', 'p.masked_phone', 's.assurance_kind', 's.created_at'])
+    .select([
+      'u.id',
+      'u.name',
+      'u.phone_demo',
+      'p.masked_phone',
+      's.assurance_kind',
+      's.created_at',
+    ])
     .where('s.id', '=', sessionId)
     .where('s.expires_at', '>', new Date())
     .executeTakeFirst();
@@ -85,7 +93,13 @@ export async function accountForSession(
       row.assurance_kind === 'onboarding'
         ? new Date(row.created_at.getTime() + onboardingEnrollmentWindowMs).toISOString()
         : null,
-    ready: row.assurance_kind !== 'onboarding',
+    ready:
+      row.assurance_kind === 'passkey' ||
+      row.assurance_kind === 'recovery' ||
+      (row.assurance_kind === 'phone_demo' &&
+        row.phone_demo &&
+        passkeys.length === 0 &&
+        phoneDemoEnabled()),
   };
 }
 export function createIdentityAuth(config: {
@@ -116,6 +130,13 @@ export function createIdentityAuth(config: {
           body: z.discriminatedUnion('mode', [
             z
               .object({
+                mode: z.literal('phone_demo'),
+                challengeId: z.uuid(),
+                name: z.string().trim().min(1).max(80).optional(),
+              })
+              .strict(),
+            z
+              .object({
                 mode: z.literal('signup'),
                 challengeId: z.uuid(),
                 name: z.string().trim().min(1).max(80),
@@ -138,10 +159,6 @@ export function createIdentityAuth(config: {
               message: 'Start verification from this browser.',
             });
           try {
-            const input =
-              ctx.body.mode === 'signup'
-                ? { name: ctx.body.name }
-                : { recoveryCode: ctx.body.recoveryCode };
             const existing = await getSessionFromCtx(ctx);
             const expectedAccount = ctx.headers?.get('x-tallie-account');
             if (expectedAccount && existing?.user.id !== expectedAccount)
@@ -149,12 +166,21 @@ export function createIdentityAuth(config: {
                 code: 'ACCOUNT_CHANGED',
                 message: 'Your account changed. Refresh Tallie before continuing.',
               });
-            const completed = await config.signup.complete(
-              token,
-              ctx.body.challengeId,
-              input,
-              existing?.session.id,
-            );
+            const completed =
+              ctx.body.mode === 'phone_demo'
+                ? await config.signup.completePhoneDemo(
+                    token,
+                    ctx.body.challengeId,
+                    ctx.body.name === undefined ? {} : { name: ctx.body.name },
+                  )
+                : await config.signup.complete(
+                    token,
+                    ctx.body.challengeId,
+                    ctx.body.mode === 'signup'
+                      ? { name: ctx.body.name }
+                      : { recoveryCode: ctx.body.recoveryCode },
+                    existing?.session.id,
+                  );
             const session = await ctx.context.internalAdapter.findSession(completed.sessionToken);
             if (!session)
               throw new APIError('UNAUTHORIZED', { message: 'Sign in again to continue.' });
@@ -292,15 +318,17 @@ export function createIdentityAuth(config: {
               message: 'Your account changed. Refresh Tallie before continuing.',
             });
           const row = await config.db
-            .selectFrom('auth_session')
-            .selectAll()
-            .where('id', '=', current.session.id)
+            .selectFrom('auth_session as s')
+            .selectAll('s')
+            .where('s.id', '=', current.session.id)
             .executeTakeFirst();
           const fresh =
             row &&
             (row.assurance_kind === 'onboarding'
               ? Date.now() - row.created_at.getTime() < onboardingEnrollmentWindowMs
-              : row.assurance_at && Date.now() - row.assurance_at.getTime() < 15 * 60_000);
+              : row.assurance_kind === 'phone_demo'
+                ? false
+                : row.assurance_at && Date.now() - row.assurance_at.getTime() < 15 * 60_000);
           if (!fresh)
             throw new APIError('FORBIDDEN', {
               code: 'STEP_UP_REQUIRED',
@@ -330,11 +358,18 @@ export function createIdentityAuth(config: {
             .where('credential_id', '=', ctx.body.response.id as string)
             .executeTakeFirst();
           if (credential)
-            await config.db
-              .updateTable('auth_session')
-              .set({ assurance_kind: 'passkey', assurance_at: new Date() })
-              .where('id', '=', current.session.id)
-              .execute();
+            await config.db.transaction().execute(async (tx) => {
+              await tx
+                .updateTable('auth_user')
+                .set({ phone_demo: false })
+                .where('id', '=', current.user.id)
+                .execute();
+              await tx
+                .updateTable('auth_session')
+                .set({ assurance_kind: 'passkey', assurance_at: new Date() })
+                .where('id', '=', current.session.id)
+                .execute();
+            });
         }
       }),
     },
@@ -418,7 +453,12 @@ export async function requireAccount(
     .selectFrom('auth_session as s')
     .innerJoin('identity_phone_bindings as p', 'p.user_id', 's.user_id')
     .innerJoin('auth_user as u', 'u.id', 's.user_id')
-    .select(['s.id', 's.user_id', 's.assurance_kind', 'p.phone_hash', 'u.name'])
+    .select(['s.id', 's.user_id', 's.assurance_kind', 'p.phone_hash', 'u.name', 'u.phone_demo'])
+    .select((eb) =>
+      eb
+        .exists(eb.selectFrom('auth_passkey').select('id').whereRef('user_id', '=', 'u.id'))
+        .as('has_passkey'),
+    )
     .where('s.id', '=', session.session.id)
     .where('s.expires_at', '>', new Date())
     .executeTakeFirst();
@@ -430,7 +470,11 @@ export async function requireAccount(
       'Your account changed. Refresh Tallie before continuing.',
       409,
     );
-  if (row.assurance_kind === 'onboarding')
+  if (
+    row.assurance_kind === 'onboarding' ||
+    (row.assurance_kind === 'phone_demo' &&
+      (!phoneDemoEnabled() || !row.phone_demo || row.has_passkey))
+  )
     throw new IdentityError(
       'PASSKEY_REQUIRED',
       'Add a passkey to finish setting up your account.',
@@ -443,14 +487,22 @@ export async function requireAccount(
     displayName: row.name,
   };
 }
-export async function requireRecentAccount(request: Request): Promise<AccountPrincipal> {
-  const principal = await requireAccount(request);
-  const session = await identityDatabase()
+export async function requireRecentAccount(
+  request: Request,
+  db: Kysely<IdentityDatabase> = identityDatabase(),
+  auth: ReturnType<typeof createIdentityAuth> = identityAuth(),
+): Promise<AccountPrincipal> {
+  const principal = await requireAccount(request, db, auth);
+  const session = await db
     .selectFrom('auth_session')
-    .select('assurance_at')
+    .select(['assurance_at', 'assurance_kind'])
     .where('id', '=', principal.sessionId)
     .executeTakeFirst();
-  if (!session?.assurance_at || Date.now() - session.assurance_at.getTime() > 15 * 60_000)
+  if (
+    !session?.assurance_at ||
+    !['passkey', 'recovery'].includes(session.assurance_kind) ||
+    Date.now() - session.assurance_at.getTime() > 15 * 60_000
+  )
     throw new IdentityError('STEP_UP_REQUIRED', 'Use your passkey again to continue.', 403);
   return principal;
 }

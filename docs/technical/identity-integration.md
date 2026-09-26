@@ -4,6 +4,8 @@
 
 ## Boundaries
 
+**Temporary preview exception:** ADR-026 permits phone-only signup/sign-in for explicitly marked manual-split demo accounts. The strong-account rules below otherwise remain unchanged.
+
 Persistent accounts live in `auth_user`; they never inherit demo people, sessions, receipts, proofs, or payment authority. Natural account setup and all money movement remain disabled for these accounts.
 
 Better Auth **1.7.6** manages signed HttpOnly session cookies and its session/passkey surfaces. The official `@better-auth/passkey` **1.7.6** plugin uses SimpleWebAuthn for cryptographic verification. Tallie's reverse-OTP bridge atomically writes a new identity, encrypted phone binding, restricted session and consumed proof in PostgreSQL, then asks Better Auth to set its normal session cookie. A response retry recovers exactly the original session; it cannot mint a new session after logout. Once consumed, only the encrypted completion result is retained for up to 30 minutes for the original signup browser. This does not extend the five-minute unconsumed provider proof or any session authority.
@@ -29,6 +31,18 @@ On initial load, the client resumes an active signup challenge or unfinished acc
 Back leaves the signup screen without revoking the restricted session; the landing action becomes **Finish setting up**. Explicit sign-out from an established account retains its existing revocation behavior. Unconsumed proof expiry returns to phone entry, and a registration freshness rejection gives a direct re-verification path. These changes do not lengthen proof/session authority or grant private access before passkey enrollment.
 
 The first live retry confirmed phone proof but exposed a draft whose session had already been lost before this repair. Read-only account metadata confirmed it had no credentials or product activity. This remains blocked pending an explicitly approved, narrowly scoped operator reset of that empty draft; no phone-only recovery endpoint or restored session token is introduced. Such a reset must recheck credentials and all account references in the same short transaction, preserve historical signup/rate-limit evidence, and refuse a changed or non-empty account. It does not establish a recovery policy for accounts with activity.
+
+## Temporary phone-only demo
+
+Migration012 adds `auth_user.phone_demo` (false by default) and distinct `phone_demo` session assurance. `phoneDemoEnabled()` requires `IDENTITY_PHONE_DEMO_ENABLED=true`, `APP_PREVIEW_MODE=true` and `APP_MODE=beta`. Only the `web-preview` launcher forwards the identity flag and injects the preview marker; it also keeps receipts/messages disabled. The state endpoint reports the authentication mode.
+
+`POST /api/identity/phone-demo/complete` accepts a challenge UUID and optional name. Existing browser, phone, purpose, expiry and one-use proof checks still apply. A new number receives `NAME_REQUIRED` without consuming the proof; submitting a name creates a marked account. Returning marked accounts retain their identity/name. Unmarked accounts and existing credentials are refused. Exact retries return the same active session; canonical state retires cached completion after logout. Sessions use Better Auth's normal 30-day rolling policy.
+
+Demo assurance permits manual-split collaboration only while enabled. Social mutations lock account/session/phone binding and reject passkey evidence. Recent-security, channel and receipt-command guards remain strong-only; hosted receipt reads and messaging are disabled. Credential-aware guards deny demo authority during interrupted passkey promotion. No payment authority is added.
+
+The tradeoff is weaker phone-possession assurance, including number reassignment risk, accepted for consenting demo testers. Disabling the flag removes private demo access. Users with their existing demo session can reverify through ordinary signup and enroll a passkey, preserving identity and clearing the marker. Users who lost that session need a planned transition/support process before the mode is disabled. Existing passkey identities do not inherit phone-only login.
+
+The founder approved and received a one-time reset of the previously diagnosed empty signup, superseding the pending-reset note above; proof/rate-limit history was preserved and database networking restored. The new mode is independently implemented and is not a recovery override for established accounts. **35 identity tests, 27 social tests and the full 314-test suite passed**, plus local synthetic browser flows. Hosted completion remains a separate check.
 
 ## Messages channel proof
 

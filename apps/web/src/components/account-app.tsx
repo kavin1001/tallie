@@ -206,7 +206,12 @@ function AccountContent({
     try {
       await api('/api/identity/sign-out', {});
       generation.current++;
-      setState({ available: state?.available ?? false, account: null, challenge: null });
+      setState({
+        available: state?.available ?? false,
+        authenticationMode: state?.authenticationMode ?? 'passkey',
+        account: null,
+        challenge: null,
+      });
       setAuthOpen(false);
       setSecurityOpen(false);
       setMessagesOpen(false);

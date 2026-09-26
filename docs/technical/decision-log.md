@@ -6,6 +6,16 @@
 
 ## Decisions
 
+## ADR-026 — Temporary phone-only manual-split preview
+
+**Date:** September 26, 2026. **Authority:** explicit founder request to remove required passkeys for the demo. **Status:** locally implemented and tested; deployment evidence tracked separately. This narrowly qualifies ADR-021 for marked preview accounts.
+
+**Decision:** require fresh browser-bound phone proof for demo signup/sign-in, mark these accounts persistently and use distinct `phone_demo` assurance. Enable it only with an explicit server flag in the beta preview launcher. Preserve identity/name on returning login. Keep existing passkey identities protected, all original proof/replay checks, and strong security/channel/receipt-command gates. Manual-split mutations require the enabled flag, matching account/session/phone and absence of passkeys. Kill-switch and credential-aware checks deny stale demo access. Use the existing 30-day rolling Better Auth session policy.
+
+**Tradeoff and transition:** phone possession is weaker than a passkey and can expose demo history after number reassignment. This is a temporary, consenting-tester exception with payments disabled. On return to passkeys, existing demo sessions can reverify into restricted enrollment and preserve account identity; users without that session need a planned transition. Never relabel demo sessions as stronger assurance or downgrade existing passkey identities.
+
+**Evidence:** 314 tests, including 35 identity and 27 social PostgreSQL cases; synthetic local browser flows cover new/returning signup, logout and stale completion. A separately approved empty-draft repair preserved proof/rate-limit evidence. See [identity integration](identity-integration.md) and [tracker](implementation-tracker.md).
+
 ### ADR-025 — Free hosted account preview before worker-backed beta
 
 **Date:** September 26, 2026. **Status:** implemented and deployed; live HTTPS/session/access checks passed, native device journeys remain pending. **Authority:** founder explicitly authorized a private `kavin1001/tallie` repository and temporary Render hosting with a $0 infrastructure budget.

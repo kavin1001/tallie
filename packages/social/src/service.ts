@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { PhoneVault } from '@tallie/channels';
 import { allocateByItem, allocateCustom, allocateEqual, type Allocation } from '@tallie/domain';
+import { phoneDemoEnabled } from '@tallie/identity';
 import { sql, type Kysely, type Selectable, type Transaction } from 'kysely';
 import type {
   CreateSocialExpense,
@@ -65,7 +66,11 @@ export class SocialService {
       SELECT s.id FROM auth_session s JOIN auth_user u ON u.id=s.user_id
       JOIN identity_phone_bindings p ON p.user_id=u.id
       WHERE s.id=${actor.sessionId}::uuid AND s.user_id=${actor.userId}::uuid
-      AND s.expires_at>${this.clock()} AND s.assurance_kind IN ('passkey','recovery')
+      AND s.expires_at>${this.clock()} AND (
+        s.assurance_kind IN ('passkey','recovery') OR
+        (${phoneDemoEnabled()} AND s.assurance_kind='phone_demo' AND u.phone_demo
+          AND NOT EXISTS (SELECT 1 FROM auth_passkey WHERE user_id=u.id))
+      )
       AND p.phone_hash=${actor.phoneHash}
       FOR SHARE OF s, u, p
     `.execute(tx);

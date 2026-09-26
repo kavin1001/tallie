@@ -11,7 +11,7 @@ export interface IdentityAccount {
   maskedPhone: string;
   passkeyCount: number;
   recoveryCodesRemaining: number;
-  assurance: 'onboarding' | 'passkey' | 'recovery';
+  assurance: 'onboarding' | 'passkey' | 'recovery' | 'phone_demo';
   /** First-passkey enrollment deadline for this restricted session; null once established. */
   enrollmentExpiresAt: string | null;
   ready: boolean;
@@ -21,7 +21,7 @@ export interface SignupChallenge {
   id: string;
   purpose: 'signup' | 'channel';
   /** Only the owning browser receives the mode of a successfully cached completion. */
-  completionMode: 'signup' | 'recovery' | null;
+  completionMode: 'signup' | 'recovery' | 'phone_demo' | null;
   status: 'creating' | 'pending' | 'verified' | 'expired' | 'failed' | 'needs_retry' | 'complete';
   maskedPhone: string;
   expiresAt: string;
@@ -29,6 +29,7 @@ export interface SignupChallenge {
 }
 
 export interface IdentityState {
+  authenticationMode: 'passkey' | 'phone_demo';
   available: boolean;
   account: IdentityAccount | null;
   challenge: SignupChallenge | null;

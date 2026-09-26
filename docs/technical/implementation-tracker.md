@@ -11,6 +11,14 @@ Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented
 
 ## September 26 hosted free-preview milestone
 
+### Temporary phone-only demo access
+
+- Founder requested phone-only demo access and approved the diagnosed empty-signup reset. The guarded transaction removed one draft account/binding and its unfinished passkey ceremony; consumed proof/rate-limit history was retained. Public database access was blocked again immediately, and temporary connection/target files were removed. The earlier pending-reset notes below are superseded by this approved operation.
+- Migration012 adds a separate `phone_demo` account marker and session assurance. The mode requires three server flags, including the preview launcher's marker. New users verify their phone and enter a name; returning demo users verify and enter directly. Existing passkey accounts remain protected. Social access still checks account/session/phone, the enabled mode, and absence of passkeys. Receipt reads now honor the disabled capability; security/channel/receipt-command and payment authority are not granted to demo sessions.
+- Turning off the flag denies demo access immediately. A current demo session plus renewed phone proof can transition through ordinary enrollment to a passkey; users who lost their session need a planned transition. Credential-aware guards also deny demo authority if passkey persistence succeeds but promotion is interrupted. Better Auth's normal 30-day rolling session policy is retained. Canonical state clears unusable cached completions after logout.
+- **314 tests across 21 files**, formatting and all-workspace TypeScript passed. Identity has 35 PostgreSQL/Better Auth/WebAuthn tests; social has 27. Local production browser checks with synthetic APIs passed: name-to-dashboard, returning-user direct entry, phone-only settings, sign-out/reload, revoked-completion restart and existing-passkey fallback. No provider calls were made by those tests. Deployment and a fresh founder signup are next.
+- The ignored reset tool was tested with 14 local cases and applied before migration012. It deliberately checks that older schema and must not be reused without fresh review.
+
 ### Interrupted signup repair
 
 - Reproduced the client routing failures in source: reload ignored active cached verification; Back from first-passkey enrollment called sign-out and destroyed the session required for safe resumption; reverification progress could be hidden behind an older enrollment screen after reload.

@@ -9,6 +9,7 @@ import type { SignupChallenge, AccountPrincipal } from './contracts';
 import type { IdentityDatabase } from './database';
 import { lockAccount } from './database';
 import { digest, normalizePhone, opaqueToken, recoveryCode, recoveryDigest } from './crypto';
+import { phoneDemoEnabled } from './config';
 import { IdentityError } from './errors';
 
 type SignupRow = Selectable<IdentityDatabase['identity_signup_transactions']>;
@@ -24,15 +25,37 @@ export class SignupService {
   ) {}
 
   async current(browserToken: string): Promise<SignupChallenge | null> {
-    const row = await this.db
-      .selectFrom('identity_signup_transactions')
-      .selectAll()
-      .where('browser_hash', '=', digest(browserToken))
-      .orderBy('created_at', 'desc')
-      .orderBy('id', 'desc')
-      .executeTakeFirst();
-    if (!row) return null;
-    return this.dto(await this.expire(this.db, row));
+    return this.db.transaction().execute(async (tx) => {
+      let row = await tx
+        .selectFrom('identity_signup_transactions')
+        .selectAll()
+        .where('browser_hash', '=', digest(browserToken))
+        .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
+        .forUpdate()
+        .executeTakeFirst();
+      if (!row) return null;
+      row = await this.expire(tx, row);
+      if (row.status === 'complete' && row.purpose === 'signup' && row.result_ciphertext) {
+        const result = JSON.parse(this.vault.open(row.result_ciphertext, `${row.id}:result`)) as {
+          sessionToken: string;
+          mode: string;
+        };
+        if (!(await this.completionSessionActive(tx, result.sessionToken, result.mode)))
+          row = await tx
+            .updateTable('identity_signup_transactions')
+            .set({
+              status: 'expired',
+              expires_at: this.now(),
+              ...terminalSecrets,
+              result_ciphertext: null,
+            })
+            .where('id', '=', row.id)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+      }
+      return this.dto(row);
+    });
   }
 
   async start(
@@ -267,6 +290,32 @@ export class SignupService {
     input: { name: string } | { recoveryCode: string },
     onboardingSessionId?: string,
   ): Promise<{ userId: string; sessionToken: string }> {
+    return this.completeMode(
+      browserToken,
+      id,
+      'name' in input ? 'signup' : 'recovery',
+      input,
+      onboardingSessionId,
+    );
+  }
+
+  async completePhoneDemo(
+    browserToken: string,
+    id: string,
+    input: { name?: string },
+  ): Promise<{ userId: string; sessionToken: string }> {
+    if (!phoneDemoEnabled())
+      throw new IdentityError('PHONE_DEMO_UNAVAILABLE', 'Phone sign-in is unavailable.', 403);
+    return this.completeMode(browserToken, id, 'phone_demo', input);
+  }
+
+  private async completeMode(
+    browserToken: string,
+    id: string,
+    mode: 'signup' | 'recovery' | 'phone_demo',
+    input: { name?: string } | { recoveryCode: string },
+    onboardingSessionId?: string,
+  ): Promise<{ userId: string; sessionToken: string }> {
     const result = await this.db.transaction().execute(async (tx) => {
       let row = await this.expire(tx, await this.locked(tx, browserToken, id));
       if (row.purpose !== 'signup')
@@ -275,7 +324,6 @@ export class SignupService {
           'This verification cannot create or recover an account.',
           403,
         );
-      const mode = 'name' in input ? 'signup' : 'recovery';
       if (row.status === 'complete' && row.result_ciphertext) {
         const cached = JSON.parse(this.vault.open(row.result_ciphertext, `${id}:result`)) as {
           userId: string;
@@ -289,13 +337,8 @@ export class SignupService {
             'This verification was completed with different details.',
             409,
           );
-        const active = await tx
-          .selectFrom('auth_session')
-          .select('id')
-          .where('token', '=', cached.sessionToken)
-          .where('expires_at', '>', this.now())
-          .executeTakeFirst();
-        if (!active) throw new IdentityError('AUTH_REQUIRED', 'Sign in again to continue.', 401);
+        if (!(await this.completionSessionActive(tx, cached.sessionToken, mode)))
+          throw new IdentityError('AUTH_REQUIRED', 'Sign in again to continue.', 401);
         return { userId: cached.userId, sessionToken: cached.sessionToken };
       }
       if (row.status !== 'verified' || !row.phone_ciphertext || row.consumed_at)
@@ -312,43 +355,97 @@ export class SignupService {
         .forUpdate()
         .executeTakeFirst();
       let userId: string;
-      if ('name' in input) {
+      if (mode !== 'recovery') {
+        if ('recoveryCode' in input) throw new IdentityError('INVALID_INPUT', 'Try again.');
         let resumable: Selectable<IdentityDatabase['auth_session']> | undefined;
-        if (existing && onboardingSessionId)
+        if (existing && mode === 'phone_demo') {
+          const account = await tx
+            .selectFrom('auth_user')
+            .select('phone_demo')
+            .where('id', '=', existing.user_id)
+            .forUpdate()
+            .executeTakeFirstOrThrow();
+          const evidence = await sql<{ blocked: boolean }>`SELECT
+            EXISTS(SELECT 1 FROM auth_passkey WHERE user_id=${existing.user_id}::uuid)
+            OR EXISTS(SELECT 1 FROM auth_account WHERE user_id=${existing.user_id}::uuid)
+            OR EXISTS(SELECT 1 FROM identity_recovery_codes WHERE user_id=${existing.user_id}::uuid)
+            OR EXISTS(SELECT 1 FROM auth_session WHERE user_id=${existing.user_id}::uuid
+              AND assurance_kind IN ('passkey','recovery')) AS blocked`.execute(tx);
+          if (!account.phone_demo || evidence.rows[0]?.blocked)
+            throw new IdentityError(
+              'ACCOUNT_RECOVERY_REQUIRED',
+              'This account uses a passkey. Use your passkey or a recovery code.',
+              409,
+            );
+        } else if (existing && onboardingSessionId) {
           resumable = await tx
             .selectFrom('auth_session')
             .selectAll()
             .where('id', '=', onboardingSessionId)
             .where('user_id', '=', existing.user_id)
-            .where('assurance_kind', '=', 'onboarding')
+            .where((eb) =>
+              eb.or([
+                eb('assurance_kind', '=', 'onboarding'),
+                eb.and([
+                  eb('assurance_kind', '=', 'phone_demo'),
+                  eb.not(
+                    eb.exists(
+                      eb
+                        .selectFrom('auth_passkey')
+                        .select('id')
+                        .where('user_id', '=', existing.user_id),
+                    ),
+                  ),
+                  eb.exists(
+                    eb
+                      .selectFrom('auth_user')
+                      .select('id')
+                      .where('id', '=', existing.user_id)
+                      .where('phone_demo', '=', true),
+                  ),
+                ]),
+              ]),
+            )
             .where('expires_at', '>', this.now())
             .forUpdate()
             .executeTakeFirst();
-        if (existing && !resumable)
+        }
+        if (existing && mode !== 'phone_demo' && !resumable)
           throw new IdentityError(
             'ACCOUNT_RECOVERY_REQUIRED',
             'This number already has a Tallie account. Use your passkey or a recovery code.',
             409,
           );
-        const name = input.name.trim();
+        const name = input.name?.trim();
+        if (!existing && mode === 'phone_demo' && input.name === undefined)
+          throw new IdentityError('NAME_REQUIRED', 'What should your friends call you?', 409);
         if (
-          !name ||
-          name.length > 80 ||
-          /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/.test(name)
+          !(existing && mode === 'phone_demo') &&
+          (!name ||
+            name.length > 80 ||
+            /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/.test(name))
         )
           throw new IdentityError('INVALID_NAME', 'Enter the name your friends know you by.');
-        userId = resumable?.user_id ?? randomUUID();
+        userId =
+          existing && mode === 'phone_demo'
+            ? existing.user_id
+            : (resumable?.user_id ?? randomUUID());
         if (resumable) {
           await tx.deleteFrom('auth_session').where('id', '=', resumable.id).execute();
           await tx
             .updateTable('auth_user')
-            .set({ name, updated_at: this.now() })
+            .set({ name: name!, updated_at: this.now() })
             .where('id', '=', userId)
             .execute();
-        } else {
+        } else if (!existing) {
           await tx
             .insertInto('auth_user')
-            .values({ id: userId, name, email: `${userId}@identity.tallie.invalid` })
+            .values({
+              id: userId,
+              name: name!,
+              email: `${userId}@identity.tallie.invalid`,
+              phone_demo: mode === 'phone_demo',
+            })
             .execute();
           const phone = this.vault.open(row.phone_ciphertext, `${id}:phone`);
           await tx
@@ -363,6 +460,7 @@ export class SignupService {
             .execute();
         }
       } else {
+        if (!('recoveryCode' in input)) throw new IdentityError('INVALID_INPUT', 'Try again.');
         if (row.recovery_attempts >= 5)
           throw new IdentityError(
             'RECOVERY_LOCKED',
@@ -409,7 +507,7 @@ export class SignupService {
           user_id: userId,
           token: sessionToken,
           expires_at: new Date(this.now().getTime() + 30 * 24 * 60 * 60_000),
-          assurance_kind: mode === 'signup' ? 'onboarding' : 'recovery',
+          assurance_kind: mode === 'signup' ? 'onboarding' : mode,
           assurance_at: mode === 'signup' ? null : this.now(),
           phone_verified_at: this.now(),
         })
@@ -582,6 +680,34 @@ export class SignupService {
     });
   }
 
+  private async completionSessionActive(
+    tx: Transaction<IdentityDatabase>,
+    sessionToken: string,
+    mode: string,
+  ): Promise<boolean> {
+    if (!['signup', 'recovery', 'phone_demo'].includes(mode)) return false;
+    const active = await tx
+      .selectFrom('auth_session as s')
+      .innerJoin('auth_user as u', 'u.id', 's.user_id')
+      .select(['s.id', 's.assurance_kind', 'u.phone_demo'])
+      .select((eb) =>
+        eb
+          .exists(eb.selectFrom('auth_passkey').select('id').whereRef('user_id', '=', 'u.id'))
+          .as('has_passkey'),
+      )
+      .where('s.token', '=', sessionToken)
+      .where('s.expires_at', '>', this.now())
+      .executeTakeFirst();
+    return (
+      !!active &&
+      (mode !== 'phone_demo' ||
+        (phoneDemoEnabled() &&
+          active.phone_demo &&
+          !active.has_passkey &&
+          active.assurance_kind === 'phone_demo'))
+    );
+  }
+
   private async locked(
     tx: Transaction<IdentityDatabase>,
     token: string,
@@ -616,7 +742,8 @@ export class SignupService {
       const result = JSON.parse(this.vault.open(row.result_ciphertext, `${row.id}:result`)) as {
         mode?: unknown;
       };
-      if (result.mode === 'signup' || result.mode === 'recovery') completionMode = result.mode;
+      if (result.mode === 'signup' || result.mode === 'recovery' || result.mode === 'phone_demo')
+        completionMode = result.mode;
     }
     let delivery: SignupChallenge['delivery'] = null;
     if (row.status === 'pending' && row.delivery_ciphertext) {

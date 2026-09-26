@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import { sql, type Kysely } from 'kysely';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PhoneVault } from '@tallie/channels';
 import { createDatabase } from '@tallie/db';
 import { migrate } from '../../db/src/migrate';
@@ -39,7 +39,13 @@ describe('real account social PostgreSQL invariants', () => {
       await admin.end();
     }
   });
-  async function account(name = 'Friend', assurance = 'passkey') {
+  afterEach(() => vi.unstubAllEnvs());
+  function enablePhoneDemo() {
+    vi.stubEnv('APP_MODE', 'beta');
+    vi.stubEnv('APP_PREVIEW_MODE', 'true');
+    vi.stubEnv('IDENTITY_PHONE_DEMO_ENABLED', 'true');
+  }
+  async function account(name = 'Friend', assurance = 'passkey', phoneDemo = false) {
     const userId = randomUUID();
     const sessionId = randomUUID();
     const phone = `+1202555${phoneIndex++}`;
@@ -49,7 +55,7 @@ describe('real account social PostgreSQL invariants', () => {
       displayName: name,
       phoneHash: vault.lookup(phone),
     };
-    await sql`INSERT INTO auth_user(id,name,email) VALUES(${userId}::uuid,${name},${`${userId}@test.invalid`})`.execute(
+    await sql`INSERT INTO auth_user(id,name,email,phone_demo) VALUES(${userId}::uuid,${name},${`${userId}@test.invalid`},${phoneDemo})`.execute(
       db,
     );
     await sql`INSERT INTO identity_phone_bindings(user_id,phone_hash,phone_ciphertext,masked_phone,verified_at) VALUES(${userId}::uuid,${actor.phoneHash},${vault.seal(phone, `${userId}:phone`)},${`••• ${phone.slice(-4)}`},${now})`.execute(
@@ -131,6 +137,127 @@ describe('real account social PostgreSQL invariants', () => {
       service.addContact(b.actor, { label: 'Friend', phone: a.phone }, randomUUID()),
     ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
   });
+  it('lets marked phone-demo accounts split and claim only the intended invitation without financial operations', async () => {
+    enablePhoneDemo();
+    const owner = await account('Alex', 'phone_demo', true);
+    const friend = await account('Maya', 'phone_demo', true);
+    const outsider = await account('Leo', 'phone_demo', true);
+    const contact = await service.addContact(
+      owner.actor,
+      { label: 'Private nickname', phone: friend.phone },
+      randomUUID(),
+    );
+    const expense = await split({ owner, friend, outsider, contact }, '11701');
+    const invitation = await service.createInvitation(
+      owner.actor,
+      { contactId: contact.id, expenseId: expense.id },
+      randomUUID(),
+    );
+    await expect(service.claimInvitation(outsider.actor, token(invitation))).rejects.toMatchObject({
+      code: 'INVITATION_UNAVAILABLE',
+    });
+    await service.claimInvitation(friend.actor, token(invitation));
+    const claimed = await service.expense(friend.actor.userId, expense.id);
+    expect(claimed.shares.reduce((sum, share) => sum + BigInt(share.amountMinor), 0n)).toBe(11701n);
+    expect(claimed.shares.find((share) => share.isYou)?.name).toBe('Maya');
+    expect(JSON.stringify(claimed)).not.toContain('Private nickname');
+    expect(claimed.paymentsEnabled).toBe(false);
+    const share = expense.shares.find((row) => !row.isYou)!;
+    await service.cancelShare(owner.actor, expense.id, share.id);
+    expect((await service.dashboard(owner.actor)).summary.owedToYouMinor).toBe('0');
+    expect(
+      (await sql<{ count: string }>`SELECT COUNT(*)::text AS count FROM operations`.execute(db))
+        .rows[0]?.count,
+    ).toBe('0');
+  });
+  it('denies phone-demo mutations and cached command retries immediately after the feature is disabled', async () => {
+    enablePhoneDemo();
+    const owner = await account('Alex', 'phone_demo', true);
+    const friend = await account('Maya', 'phone_demo', true);
+    const contactKey = randomUUID();
+    const contactInput = { label: 'Maya', phone: friend.phone };
+    const contact = await service.addContact(owner.actor, contactInput, contactKey);
+    const expense = await service.createExpense(
+      owner.actor,
+      {
+        title: 'Dinner',
+        emoji: '🍝',
+        category: 'dinner',
+        totalMinor: '2000',
+        participantIds: [owner.actor.userId, contact.id],
+        method: 'equal',
+      },
+      randomUUID(),
+    );
+    const invitation = await service.createInvitation(
+      owner.actor,
+      { contactId: contact.id, expenseId: expense.id },
+      randomUUID(),
+    );
+    vi.stubEnv('IDENTITY_PHONE_DEMO_ENABLED', 'false');
+    await expect(service.addContact(owner.actor, contactInput, contactKey)).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+    await expect(service.claimInvitation(friend.actor, token(invitation))).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+    await expect(service.revokeInvitation(owner.actor, invitation.id)).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+    await expect(
+      service.cancelShare(
+        owner.actor,
+        expense.id,
+        expense.shares.find((share) => !share.isYou)!.id,
+      ),
+    ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    expect((await service.inspectInvitation(token(invitation))).status).toBe('available');
+    expect(
+      (await service.expense(owner.actor.userId, expense.id)).shares.some(
+        (share) => share.status === 'canceled',
+      ),
+    ).toBe(false);
+  });
+  it('does not grant phone-demo access to an unmarked established account', async () => {
+    enablePhoneDemo();
+    const user = await account('Existing', 'phone_demo');
+    const friend = await account();
+    await expect(
+      service.addContact(user.actor, { label: 'Friend', phone: friend.phone }, randomUUID()),
+    ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+  });
+  it('rejects an old phone-demo session if passkey enrollment committed before its promotion hook', async () => {
+    enablePhoneDemo();
+    const user = await account('Newly secured', 'phone_demo', true);
+    const friend = await account();
+    await sql`INSERT INTO auth_passkey(id,user_id,public_key,credential_id,counter,device_type,backed_up)
+      VALUES(${randomUUID()}::uuid,${user.actor.userId}::uuid,'synthetic-public-key',${randomUUID()},0,'singleDevice',false)`.execute(
+      db,
+    );
+    await expect(
+      service.addContact(user.actor, { label: 'Friend', phone: friend.phone }, randomUUID()),
+    ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+  });
+  it.each(['revoked', 'expired', 'wrong account', 'wrong phone'] as const)(
+    'preserves session and identity binding for a %s phone-demo session',
+    async (failure) => {
+      enablePhoneDemo();
+      const owner = await account('Alex', 'phone_demo', true);
+      const friend = await account('Maya', 'phone_demo', true);
+      let actor = owner.actor;
+      if (failure === 'revoked')
+        await sql`DELETE FROM auth_session WHERE id=${actor.sessionId}::uuid`.execute(db);
+      else if (failure === 'expired')
+        await sql`UPDATE auth_session SET expires_at=${new Date(now.getTime() - 1)} WHERE id=${actor.sessionId}::uuid`.execute(
+          db,
+        );
+      else if (failure === 'wrong account') actor = { ...actor, sessionId: friend.actor.sessionId };
+      else actor = { ...actor, phoneHash: friend.actor.phoneHash };
+      await expect(
+        service.addContact(actor, { label: 'Friend', phone: '+12025550000' }, randomUUID()),
+      ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    },
+  );
   it('never resolves an ambiguous alias or guesses a partial name', async () => {
     const a = await account();
     const b = await account();

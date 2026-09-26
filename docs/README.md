@@ -25,6 +25,8 @@ Start with the [product requirements](payments-prd.md), then the [living technic
 
 ## Keeping this live
 
+The founder requested temporary phone-only signup/sign-in for the manual-split preview (ADR-026). This is scoped to marked demo accounts and does not weaken existing passkey identities or enable money movement. See the identity and deployment guides for configuration, transition and **314-test** verification. Hosted release status is recorded in the tracker.
+
 Update the affected design section and tracker with each material build change. Preserve old decisions when superseding them. Record verification at the level actually demonstrated: docs, local model/database, sandbox, or live pilot. Link implementation/tests when marking work implemented. Keep secrets and real customer information out of the repository.
 
 The repository contains a local Tallie account app with persistent phone-bound identities, required passkeys, recovery, contacts, private invitations, real shared-expense records, receipt capture, and durable Messages workflows. Four runnable roles share PostgreSQL and application services: web, maintenance, receipt processing, and messaging. See the root [run guide](../README.md) and [implementation tracker](technical/implementation-tracker.md) for the current integration state.

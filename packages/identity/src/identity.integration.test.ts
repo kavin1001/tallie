@@ -6,7 +6,7 @@ import {
   sign,
   type KeyObject,
 } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import type { Kysely } from 'kysely';
@@ -15,7 +15,13 @@ import { migrate } from '../../db/src/migrate';
 import { createIdentityDatabase, lockAccount, type IdentityDatabase } from './database';
 import { SignupService } from './signup';
 import { digest, normalizePhone, opaqueToken } from './crypto';
-import { accountForSession, createIdentityAuth, requireAccount } from './auth';
+import {
+  accountForSession,
+  createIdentityAuth,
+  requireAccount,
+  requireRecentAccount,
+} from './auth';
+import { phoneDemoEnabled } from './config';
 import {
   cleanupExpiredIdentityProofs,
   listAccountPasskeys,
@@ -26,6 +32,7 @@ const serviceSid = `SV${'a'.repeat(32)}`;
 const origin = 'http://localhost:3000';
 
 describe('persistent identity PostgreSQL and real WebAuthn verification', () => {
+  afterEach(() => vi.unstubAllEnvs());
   let db: Kysely<IdentityDatabase>, admin: Pool;
   let phoneIndex = 2000;
   const schema = `tallie_identity_test_${randomUUID().replaceAll('-', '')}`;
@@ -690,6 +697,411 @@ describe('persistent identity PostgreSQL and real WebAuthn verification', () => 
       },
     };
   }
+  function enablePhoneDemo() {
+    vi.stubEnv('IDENTITY_PHONE_DEMO_ENABLED', 'true');
+    vi.stubEnv('APP_PREVIEW_MODE', 'true');
+    vi.stubEnv('APP_MODE', 'beta');
+  }
+  it('phone demo requires a name only for signup and preserves the account and name on phone sign-in', async () => {
+    enablePhoneDemo();
+    const f = fixture(),
+      proof = await f.verified();
+    await expect(f.service.completePhoneDemo(f.browser, proof.id, {})).rejects.toMatchObject({
+      code: 'NAME_REQUIRED',
+    });
+    expect(await f.service.current(f.browser)).toMatchObject({ status: 'verified' });
+    const created = await f.service.completePhoneDemo(f.browser, proof.id, { name: 'Demo owner' });
+    const session = await db
+      .selectFrom('auth_session')
+      .selectAll()
+      .where('token', '=', created.sessionToken)
+      .executeTakeFirstOrThrow();
+    expect(session.assurance_kind).toBe('phone_demo');
+    expect(session.expires_at.getTime() - session.created_at.getTime()).toBeLessThanOrEqual(
+      30 * 24 * 60 * 60_000,
+    );
+    expect(await accountForSession(db, session.id)).toMatchObject({
+      id: created.userId,
+      name: 'Demo owner',
+      ready: true,
+      assurance: 'phone_demo',
+      passkeyCount: 0,
+    });
+    const returning = fixture(f.phone),
+      nextProof = await returning.verified();
+    const signedIn = await returning.service.completePhoneDemo(returning.browser, nextProof.id, {
+      name: 'Ignored replacement',
+    });
+    expect(signedIn.userId).toBe(created.userId);
+    expect(signedIn.sessionToken).not.toBe(created.sessionToken);
+    expect(
+      await db
+        .selectFrom('auth_user')
+        .select(['name', 'phone_demo'])
+        .where('id', '=', created.userId)
+        .executeTakeFirst(),
+    ).toEqual({ name: 'Demo owner', phone_demo: true });
+  });
+  it.each([
+    ['IDENTITY_PHONE_DEMO_ENABLED', 'false'],
+    ['APP_PREVIEW_MODE', 'false'],
+    ['APP_MODE', 'demo'],
+  ])('phone demo refuses completion when %s is %s', async (key, value) => {
+    enablePhoneDemo();
+    const f = fixture(),
+      proof = await f.verified();
+    vi.stubEnv(key, value);
+    expect(phoneDemoEnabled()).toBe(false);
+    await expect(
+      f.service.completePhoneDemo(f.browser, proof.id, { name: 'No account' }),
+    ).rejects.toMatchObject({ code: 'PHONE_DEMO_UNAVAILABLE' });
+    expect(await f.service.current(f.browser)).toMatchObject({ status: 'verified' });
+  });
+  it('phone demo requires unexpired same-browser correct-phone proof and rejects channel purpose', async () => {
+    enablePhoneDemo();
+    const pending = fixture(),
+      pendingProof = await pending.start();
+    await expect(
+      pending.service.completePhoneDemo(pending.browser, pendingProof.id, { name: 'Pending' }),
+    ).rejects.toMatchObject({ code: 'PHONE_PROOF_REQUIRED' });
+    pending.result({ status: 'approved', to: '+12025559999' });
+    expect(await pending.service.check(pending.browser, pendingProof.id)).toMatchObject({
+      status: 'needs_retry',
+    });
+    await expect(
+      pending.service.completePhoneDemo(pending.browser, pendingProof.id, { name: 'Wrong phone' }),
+    ).rejects.toMatchObject({ code: 'PHONE_PROOF_REQUIRED' });
+    const f = fixture(),
+      proof = await f.verified();
+    await expect(
+      f.service.completePhoneDemo(opaqueToken(), proof.id, { name: 'Wrong browser' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    f.advance(6 * 60_000);
+    await expect(
+      f.service.completePhoneDemo(f.browser, proof.id, { name: 'Expired' }),
+    ).rejects.toMatchObject({ code: 'PHONE_PROOF_REQUIRED' });
+    const owner = fixture(),
+      first = await owner.verified();
+    const created = await owner.service.complete(owner.browser, first.id, { name: 'Strong' });
+    const session = await db
+      .updateTable('auth_session')
+      .set({ assurance_kind: 'passkey', assurance_at: new Date() })
+      .where('token', '=', created.sessionToken)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    const channel = fixture(owner.phone);
+    const channelProof = await channel.service.startChannel(
+      {
+        userId: created.userId,
+        sessionId: session.id,
+        phoneHash: owner.vault.lookup(owner.phone),
+        displayName: 'Strong',
+      },
+      channel.browser,
+      randomUUID(),
+    );
+    channel.result({ status: 'approved' });
+    await channel.service.check(channel.browser, channelProof.id);
+    await expect(
+      channel.service.completePhoneDemo(channel.browser, channelProof.id, {}),
+    ).rejects.toMatchObject({ code: 'WRONG_PROOF_PURPOSE' });
+  });
+  it('phone demo refuses ordinary accounts and any passkey evidence even if the demo marker remains set', async () => {
+    enablePhoneDemo();
+    const strong = fixture(),
+      initial = await strong.verified();
+    await strong.service.complete(strong.browser, initial.id, { name: 'Existing account' });
+    const challenger = fixture(strong.phone),
+      challenge = await challenger.verified();
+    await expect(
+      challenger.service.completePhoneDemo(challenger.browser, challenge.id, {}),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_RECOVERY_REQUIRED' });
+    const f = fixture(),
+      proof = await f.verified();
+    const created = await f.service.completePhoneDemo(f.browser, proof.id, {
+      name: 'Credential present',
+    });
+    await db
+      .insertInto('auth_passkey')
+      .values({
+        id: randomUUID(),
+        user_id: created.userId,
+        name: 'Test',
+        public_key: 'synthetic',
+        credential_id: randomUUID(),
+        counter: 0,
+        device_type: 'singleDevice',
+        backed_up: false,
+        transports: null,
+        created_at: new Date(),
+        aaguid: null,
+      })
+      .execute();
+    const returning = fixture(f.phone),
+      next = await returning.verified();
+    await expect(
+      returning.service.completePhoneDemo(returning.browser, next.id, {}),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_RECOVERY_REQUIRED' });
+  });
+  it('phone demo completion is idempotent and cannot resurrect a logged-out session', async () => {
+    enablePhoneDemo();
+    const f = fixture(),
+      proof = await f.verified();
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        f.service.completePhoneDemo(f.browser, proof.id, { name: 'One account' }),
+      ),
+    );
+    expect(new Set(results.map((result) => result.userId)).size).toBe(1);
+    expect(new Set(results.map((result) => result.sessionToken)).size).toBe(1);
+    expect(await f.service.current(f.browser)).toMatchObject({ completionMode: 'phone_demo' });
+    await expect(f.service.completePhoneDemo(f.browser, proof.id, {})).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+    await expect(
+      f.service.complete(f.browser, proof.id, { name: 'One account' }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    f.advance(6 * 60_000);
+    expect(await f.service.completePhoneDemo(f.browser, proof.id, { name: 'One account' })).toEqual(
+      results[0],
+    );
+    await db.deleteFrom('auth_session').where('token', '=', results[0]!.sessionToken).execute();
+    await expect(
+      f.service.completePhoneDemo(f.browser, proof.id, { name: 'One account' }),
+    ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+  });
+  it('persisted passkey evidence closes demo authority even if the post-registration marker update never ran', async () => {
+    enablePhoneDemo();
+    const f = fixture(),
+      proof = await f.verified();
+    const auth = createIdentityAuth({
+      db,
+      origin,
+      secret: 'synthetic-test-secret-with-at-least-32-characters',
+      signup: f.service,
+    });
+    const browser = client(auth, f.browser);
+    const completed = await browser.request('/complete-phone', {
+      mode: 'phone_demo',
+      challengeId: proof.id,
+      name: 'Partial promotion',
+    });
+    expect(completed.status).toBe(200);
+    const principal = await requireAccount(
+      new Request(origin, { headers: browser.headers() }),
+      db,
+      auth,
+    );
+    expect((await browser.request('/passkey/generate-register-options')).status).toBe(403);
+    await db
+      .insertInto('auth_passkey')
+      .values({
+        id: randomUUID(),
+        user_id: principal.userId,
+        name: 'Persisted credential',
+        public_key: 'synthetic',
+        credential_id: randomUUID(),
+        counter: 0,
+        device_type: 'singleDevice',
+        backed_up: false,
+        transports: null,
+        created_at: new Date(),
+        aaguid: null,
+      })
+      .execute();
+    expect(
+      await db
+        .selectFrom('auth_user')
+        .select('phone_demo')
+        .where('id', '=', principal.userId)
+        .executeTakeFirst(),
+    ).toEqual({ phone_demo: true });
+    expect(await accountForSession(db, principal.sessionId)).toMatchObject({
+      ready: false,
+      passkeyCount: 1,
+    });
+    await expect(
+      requireAccount(new Request(origin, { headers: browser.headers() }), db, auth),
+    ).rejects.toMatchObject({ code: 'PASSKEY_REQUIRED' });
+    await expect(
+      f.service.completePhoneDemo(f.browser, proof.id, { name: 'Partial promotion' }),
+    ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    const reverify = fixture(f.phone),
+      replacement = await reverify.verified();
+    await expect(
+      reverify.service.complete(
+        reverify.browser,
+        replacement.id,
+        { name: 'Stale demo session' },
+        principal.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_RECOVERY_REQUIRED' });
+  });
+  it.each(['signup', 'phone_demo'] as const)(
+    'canonical %s challenge stops offering completion after real cookie logout',
+    async (mode) => {
+      enablePhoneDemo();
+      const f = fixture(),
+        proof = await f.verified();
+      const auth = createIdentityAuth({
+        db,
+        origin,
+        secret: 'synthetic-test-secret-with-at-least-32-characters',
+        signup: f.service,
+      });
+      const browser = client(auth, f.browser);
+      expect(
+        (
+          await browser.request('/complete-phone', {
+            mode,
+            challengeId: proof.id,
+            name: 'Logout owner',
+          })
+        ).status,
+      ).toBe(200);
+      expect(await f.service.current(f.browser)).toMatchObject({
+        status: 'complete',
+        completionMode: mode,
+      });
+      expect((await browser.request('/sign-out', {})).status).toBe(200);
+      expect(await f.service.current(f.browser)).toMatchObject({
+        status: 'expired',
+        completionMode: null,
+      });
+      const stored = await db
+        .selectFrom('identity_signup_transactions')
+        .select(['result_ciphertext', 'consumed_at', 'completed_user_id'])
+        .where('id', '=', proof.id)
+        .executeTakeFirstOrThrow();
+      expect(stored.result_ciphertext).toBeNull();
+      expect(stored.consumed_at).not.toBeNull();
+      expect(stored.completed_user_id).not.toBeNull();
+    },
+  );
+  it('phone demo cookies allow account access but not security/channel authority, and disabling the mode revokes access', async () => {
+    enablePhoneDemo();
+    const f = fixture(),
+      proof = await f.verified();
+    const auth = createIdentityAuth({
+      db,
+      origin,
+      secret: 'synthetic-test-secret-with-at-least-32-characters',
+      signup: f.service,
+    });
+    const browser = client(auth, f.browser);
+    expect(
+      (await browser.request('/complete-phone', { mode: 'phone_demo', challengeId: proof.id })).body
+        .code,
+    ).toBe('NAME_REQUIRED');
+    const complete = await browser.request('/complete-phone', {
+      mode: 'phone_demo',
+      challengeId: proof.id,
+      name: 'Cookie owner',
+    });
+    expect(complete.status).toBe(200);
+    const principal = await requireAccount(
+      new Request(origin, { headers: browser.headers() }),
+      db,
+      auth,
+    );
+    await expect(
+      requireRecentAccount(new Request(origin, { headers: browser.headers() }), db, auth),
+    ).rejects.toMatchObject({ code: 'STEP_UP_REQUIRED' });
+    await expect(lockAccount(db, principal)).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    await expect(f.service.rotateRecoveryCodes(principal)).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+    await expect(f.service.startChannel(principal, f.browser, randomUUID())).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+    vi.stubEnv('IDENTITY_PHONE_DEMO_ENABLED', 'false');
+    expect(await accountForSession(db, principal.sessionId)).toMatchObject({
+      ready: false,
+      assurance: 'phone_demo',
+    });
+    await expect(
+      requireAccount(new Request(origin, { headers: browser.headers() }), db, auth),
+    ).rejects.toMatchObject({ code: 'PASSKEY_REQUIRED' });
+    expect((await browser.request('/passkey/generate-register-options')).status).toBe(403);
+  });
+  it('a mode-off demo session can reverify and upgrade to a passkey that permanently disables phone-only sign-in', async () => {
+    enablePhoneDemo();
+    const f = fixture(),
+      proof = await f.verified();
+    const auth = createIdentityAuth({
+      db,
+      origin,
+      secret: 'synthetic-test-secret-with-at-least-32-characters',
+      signup: f.service,
+    });
+    const browser = client(auth, f.browser);
+    const completed = await browser.request('/complete-phone', {
+      mode: 'phone_demo',
+      challengeId: proof.id,
+      name: 'Upgrade owner',
+    });
+    expect(completed.status).toBe(200);
+    const principal = await requireAccount(
+      new Request(origin, { headers: browser.headers() }),
+      db,
+      auth,
+    );
+    const siblingProof = fixture(f.phone),
+      siblingChallenge = await siblingProof.verified();
+    const sibling = await siblingProof.service.completePhoneDemo(
+      siblingProof.browser,
+      siblingChallenge.id,
+      {},
+    );
+    const siblingSession = await db
+      .selectFrom('auth_session')
+      .select('id')
+      .where('token', '=', sibling.sessionToken)
+      .executeTakeFirstOrThrow();
+    vi.stubEnv('IDENTITY_PHONE_DEMO_ENABLED', 'false');
+    f.advance(1);
+    f.result({
+      status: 'pending',
+      sid: `VR${randomUUID().replaceAll('-', '')}`,
+      expires_at: new Date(Date.now() + 300_000).toISOString(),
+    });
+    const replacement = await f.start();
+    f.result({ status: 'approved' });
+    await f.service.check(f.browser, replacement.id);
+    const resumed = await browser.request(
+      '/complete-phone',
+      { mode: 'signup', challengeId: replacement.id, name: 'Upgrade owner' },
+      principal.userId,
+    );
+    expect(resumed.status).toBe(200);
+    const options = await browser.request('/passkey/generate-register-options');
+    expect(options.status).toBe(200);
+    expect(
+      (
+        await browser.request('/passkey/verify-registration', {
+          response: syntheticAuthenticator().registration(String(options.body.challenge)),
+          name: 'Upgraded passkey',
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      await db
+        .selectFrom('auth_user')
+        .select('phone_demo')
+        .where('id', '=', principal.userId)
+        .executeTakeFirst(),
+    ).toEqual({ phone_demo: false });
+    expect(
+      (await requireAccount(new Request(origin, { headers: browser.headers() }), db, auth)).userId,
+    ).toBe(principal.userId);
+    enablePhoneDemo();
+    expect(await accountForSession(db, siblingSession.id)).toMatchObject({ ready: false });
+    const returning = fixture(f.phone),
+      returningProof = await returning.verified();
+    await expect(
+      returning.service.completePhoneDemo(returning.browser, returningProof.id, {}),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_RECOVERY_REQUIRED' });
+  });
   it('restores enrollment freshness and resumes a stale enrollment using the same browser session and fresh proof', async () => {
     const f = fixture(),
       proof = await f.verified();

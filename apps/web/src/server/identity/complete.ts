@@ -1,19 +1,26 @@
 import { z } from 'zod';
 import { identityAuth } from '@tallie/identity';
 import { identityRoute, readJson, requireBrowser } from './http';
-export function completeRoute(mode: 'signup' | 'recovery') {
+export function completeRoute(mode: 'signup' | 'recovery' | 'phone_demo') {
   return identityRoute(async (request) => {
     requireBrowser(request);
     const body =
-      mode === 'signup'
+      mode === 'phone_demo'
         ? await readJson(
             request,
-            z.object({ challengeId: z.uuid(), name: z.string().trim().min(1).max(80) }).strict(),
+            z
+              .object({ challengeId: z.uuid(), name: z.string().trim().min(1).max(80).optional() })
+              .strict(),
           )
-        : await readJson(
-            request,
-            z.object({ challengeId: z.uuid(), recoveryCode: z.string().min(1).max(80) }).strict(),
-          );
+        : mode === 'signup'
+          ? await readJson(
+              request,
+              z.object({ challengeId: z.uuid(), name: z.string().trim().min(1).max(80) }).strict(),
+            )
+          : await readJson(
+              request,
+              z.object({ challengeId: z.uuid(), recoveryCode: z.string().min(1).max(80) }).strict(),
+            );
     const url = new URL('/api/identity/auth/complete-phone', process.env.APP_ORIGIN);
     const response = await identityAuth().handler(
       new Request(url, {

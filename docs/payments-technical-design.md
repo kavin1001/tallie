@@ -1,6 +1,8 @@
 # Peer Payments — Living Technical Design
 
-**Version:** 0.4 · **Updated:** September 26, 2026
+**Version:** 0.5 · **Updated:** September 26, 2026
+
+**Temporary demo amendment (ADR-026):** the founder requested phone-only access for the manual-split preview. Marked demo identities use fresh phone proof under a server-only preview flag, with distinct session assurance. Existing passkey accounts retain their protection. The flag's removal denies private demo access; migration back to passkeys requires renewed proof and the existing session. See [identity integration](technical/identity-integration.md) for the tradeoff and 314-test evidence. This exception grants no financial authority and does not replace the stronger beta authentication design below.
 
 **Status:** Persistent accounts, passkeys, contacts/invitations and shared expenses are implemented. The private repository is published, 278 local tests and Linux CI pass, and a constrained ARM64 container smoke passed. The limited free preview is live at [tallie-web.onrender.com](https://tallie-web.onrender.com); Render build/deployment and the documented HTTPS readiness/access-boundary checks passed. Receipts and the Messages agent are disabled in this deployment. Natural money movement, device verification, HEIC and full redacted image sharing remain gated. See the implementation tracker for current evidence.
 
