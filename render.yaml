@@ -13,7 +13,6 @@ services:
     dockerCommand: node scripts/run-service.mjs web-preview
     healthCheckPath: /api/status
     autoDeployTrigger: off
-    maxShutdownDelaySeconds: 60
     envVars:
       - key: NODE_ENV
         value: production
