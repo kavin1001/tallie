@@ -62,6 +62,8 @@ Back leaves the signup screen without revoking the restricted session; the landi
 
 Strict TypeScript for the identity package and formatting passed. No live Sendblue verification or outgoing message was created by these automated tests.
 
+The interrupted-signup repair additionally passed ten frontend state regressions and the full **291-test / 21-file** aggregate, plus formatting, all-workspace TypeScript and production build. A local production UI with synthetic API responses confirmed automatic name-step restoration, name submission to passkey, Back/Finish setting up without a sign-out call, reload at passkey, stale enrollment to fresh phone entry, reload during renewed verification, and a prefilled name after renewed verification. That fixture made zero provider calls; it validates browser routing independently of the real-PostgreSQL/cryptographic integration tests. The founder's actual device remains the final end-to-end observation.
+
 ## Remaining release gates
 
 Observe signup, passkey enrollment, returning sign-in and recovery on actual supported devices, including the final HTTPS domain. Passkeys created for localhost do not migrate to a deployed domain. Confirm Sendblue channel/device coverage before selecting it as the sole phone onboarding path. Verify credential revocation and recovery on devices; finish approved support recovery/phone-change policies, schedule secret cleanup, and validate production database/role isolation, and operational monitoring before treating this as a finished production authentication program.

@@ -1,7 +1,7 @@
 # Implementation tracker
 
 **Updated:** September 26, 2026  
-**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `0da4950` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
+**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `12da4b2` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
 
 **Provider status:** Sendblue phone proof worked in the earlier development test. OpenAI synthetic receipt extraction passed earlier live checks. Natural sandbox and consumer-P2P acceptance remain pending. The free hosted preview disables receipt processing and messaging, retaining Sendblue Verify for signup.
 
@@ -15,7 +15,7 @@ Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented
 
 - Reproduced the client routing failures in source: reload ignored active cached verification; Back from first-passkey enrollment called sign-out and destroyed the session required for safe resumption; reverification progress could be hidden behind an older enrollment screen after reload.
 - Resume signup from canonical challenge/account state; preserve restricted enrollment on Back; expose the existing enrollment deadline and direct expired flows to fresh phone verification. Saved account names are prefilled during renewed proof completion. Existing-account recovery and private-access requirements are unchanged.
-- Added ten signup-state regressions and three identity integration regressions, including real Better Auth cookie handling and cryptographic passkey completion after stale enrollment. **291 tests across 21 files**, formatting, all-workspace TypeScript and production build passed. Browser fixture checks use synthetic API responses and never contact providers; deployment and device observations remain separate evidence.
+- Added ten signup-state regressions and three identity integration regressions, including real Better Auth cookie handling and cryptographic passkey completion after stale enrollment. **291 tests across 21 files**, formatting, all-workspace TypeScript and production build passed. Browser fixture checks use synthetic API responses and never contact providers. Render release `12da4b2` is live; [CI passed](https://github.com/kavin1001/tallie/actions/runs/36225515944), as did live readiness/anonymous identity/home checks. The founder should retry in the original browser; their real-device result remains separate evidence.
 
 ### Frontend refinement
 
