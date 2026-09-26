@@ -1,6 +1,6 @@
 # Natural integration: sandbox accounts and balances
 
-Updated September 26, 2026. **Implemented locally; authenticated sandbox verification pending.** The supplied party key is identified by its prefix as production; it has not been sent to Natural. Sandbox credentials and consumer P2P approval remain pending. No Natural credential has been printed or committed, and this milestone made no authenticated provider calls.
+Updated September 26, 2026. **Enabled locally at `http://localhost:3001`; sandbox party and agent credentials passed live read-only checks.** The platform and its configured agent are ACTIVE, and both credentials resolve to the same platform. The founder supplied the agent key/ID from dashboard setup; the API probe itself does not attest that pairing. Actual customer setup/balance behavior and consumer P2P approval remain pending. The earlier production key is retained only in an unused ignored local setting and was not sent to Natural. No credential has been printed or committed, and no agent/customer/payment mutation has occurred.
 
 **Founder release rule:** keep this integration local. Do not push or deploy it to production until the founder has tested locally and approved release. Hosted `94a2240` remains unchanged.
 

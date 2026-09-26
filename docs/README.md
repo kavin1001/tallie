@@ -36,4 +36,4 @@ The free account/manual-split preview is live at [tallie-web.onrender.com](https
 
 AWS storage remains deferred because account-specific free-plan coverage was not confirmed. Receipts, the Messages agent and payments are disabled in this deployment. Natural approval/integration, final-domain device signup/recovery, live messaging callbacks/media/delivery, HEIC and full redacted receipt sharing remain gates. Demo payments stay confined to the separate local simulator and are unavailable on the hosted preview.
 
-Natural sandbox account setup, test balances and the typed provider client are now implemented locally. The feature defaults off; authenticated sandbox evidence and consumer P2P approval remain pending. See the integration runbook and tracker for exact boundaries.
+Natural sandbox account setup, test balances and the typed provider client are now implemented locally. The feature defaults off but is enabled in local configuration at `http://localhost:3001` after live read-only credential checks. The actual customer/balance flow and consumer P2P approval remain pending. See the integration runbook and tracker for exact boundaries.
