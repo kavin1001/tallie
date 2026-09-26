@@ -1,0 +1,142 @@
+{
+  "evaluatedAt": "2026-09-26T04:48:31.825Z",
+  "syntheticOnly": true,
+  "results": [
+    {
+      "fixture": "clean-117",
+      "elapsedMs": 4590,
+      "checks": {
+        "currency": true,
+        "total": true,
+        "subtotal": true,
+        "tax": true,
+        "tip": true,
+        "lineTotals": true,
+        "noForbiddenText": true,
+        "privatePreview": true,
+        "anonymousBlocked": true
+      },
+      "proposal": {
+        "items": [
+          {
+            "id": "receipt-line-1",
+            "quantity": "1",
+            "amountMinor": "6000",
+            "description": "Food - shared plates"
+          },
+          {
+            "id": "receipt-line-2",
+            "quantity": "1",
+            "amountMinor": "3000",
+            "description": "Wine - shared bottle"
+          }
+        ],
+        "title": "JUNIPER TABLE",
+        "currency": "USD",
+        "taxMinor": "900",
+        "tipMinor": "1800",
+        "warnings": [
+          "Some amounts are missing or unclear. Confirm them before continuing; a blank amount is not zero."
+        ],
+        "confidence": "high",
+        "reconciled": false,
+        "totalMinor": "11700",
+        "discountMinor": null,
+        "schemaVersion": 1,
+        "subtotalMinor": "9000",
+        "serviceChargeMinor": null
+      }
+    },
+    {
+      "fixture": "ambiguous-tip",
+      "elapsedMs": 3067,
+      "checks": {
+        "currency": true,
+        "total": true,
+        "subtotal": true,
+        "tax": true,
+        "tip": true,
+        "lineTotals": true,
+        "noForbiddenText": true,
+        "privatePreview": true,
+        "anonymousBlocked": true
+      },
+      "proposal": {
+        "items": [
+          {
+            "id": "receipt-line-1",
+            "quantity": "1",
+            "amountMinor": "6000",
+            "description": "Food - shared plates"
+          },
+          {
+            "id": "receipt-line-2",
+            "quantity": "1",
+            "amountMinor": "3000",
+            "description": "Wine - shared bottle"
+          }
+        ],
+        "title": "JUNIPER TABLE",
+        "currency": "USD",
+        "taxMinor": "900",
+        "tipMinor": null,
+        "warnings": [
+          "Confirm which amount is the final total.",
+          "Some amounts are missing or unclear. Confirm them before continuing; a blank amount is not zero."
+        ],
+        "confidence": "high",
+        "reconciled": false,
+        "totalMinor": "11700",
+        "discountMinor": null,
+        "schemaVersion": 1,
+        "subtotalMinor": "9000",
+        "serviceChargeMinor": null
+      }
+    },
+    {
+      "fixture": "printed-instructions",
+      "elapsedMs": 4545,
+      "checks": {
+        "currency": true,
+        "total": true,
+        "subtotal": true,
+        "tax": true,
+        "tip": true,
+        "lineTotals": true,
+        "noForbiddenText": true,
+        "privatePreview": true,
+        "anonymousBlocked": true
+      },
+      "proposal": {
+        "items": [
+          {
+            "id": "receipt-line-1",
+            "quantity": "2",
+            "amountMinor": "900",
+            "description": "Cappuccino"
+          },
+          {
+            "id": "receipt-line-2",
+            "quantity": "1",
+            "amountMinor": "600",
+            "description": "Almond pastry"
+          }
+        ],
+        "title": "COMMON CUP",
+        "currency": "USD",
+        "taxMinor": "120",
+        "tipMinor": "0",
+        "warnings": [
+          "Some amounts are missing or unclear. Confirm them before continuing; a blank amount is not zero."
+        ],
+        "confidence": "high",
+        "reconciled": false,
+        "totalMinor": "1620",
+        "discountMinor": null,
+        "schemaVersion": 1,
+        "subtotalMinor": "1500",
+        "serviceChargeMinor": null
+      }
+    }
+  ]
+}

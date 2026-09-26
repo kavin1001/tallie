@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1060" viewBox="0 0 960 1060">
+  <rect width="100%" height="100%" fill="#e5e4df"/>
+  <rect x="54" y="32" width="852" height="996" rx="4" fill="#fffef8"/>
+  <text x="480" y="111" font-family="Courier New, Courier, monospace" font-size="43" text-anchor="middle" fill="#242421" font-weight="700">JUNIPER TABLE</text>
+  <text x="480" y="158" font-family="Courier New, Courier, monospace" font-size="23" text-anchor="middle" fill="#242421" >Dinner check 001 · 09/20/2026</text>
+  <text x="480" y="209" font-family="Courier New, Courier, monospace" font-size="21" text-anchor="middle" fill="#242421" >SYNTHETIC EVALUATION FIXTURE</text>
+  <line x1="104" y1="242" x2="856" y2="242" stroke="#aaa89f" stroke-width="2" stroke-dasharray="8 8"/>
+  <text x="104" y="315" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="start" fill="#242421" >1 Food - shared plates</text><text x="856" y="315" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="end" fill="#242421" >60.00</text>
+<text x="104" y="376" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="start" fill="#242421" >1 Wine - shared bottle</text><text x="856" y="376" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="end" fill="#242421" >30.00</text>
+<line x1="104" y1="421" x2="856" y2="421" stroke="#aaa89f" stroke-width="2" stroke-dasharray="8 8"/>
+<text x="104" y="483" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="start" fill="#242421" >Subtotal</text><text x="856" y="483" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="end" fill="#242421" >90.00</text>
+<text x="104" y="540" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="start" fill="#242421" >Tax</text><text x="856" y="540" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="end" fill="#242421" >9.00</text>
+<text x="104" y="597" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="start" fill="#242421" >Tip</text><text x="856" y="597" font-family="Courier New, Courier, monospace" font-size="30" text-anchor="end" fill="#242421" >18.00</text>
+<line x1="104" y1="642" x2="856" y2="642" stroke="#aaa89f" stroke-width="2" stroke-dasharray="8 8"/>
+<text x="104" y="717" font-family="Courier New, Courier, monospace" font-size="39" text-anchor="start" fill="#242421" font-weight="700">TOTAL PAID</text><text x="856" y="717" font-family="Courier New, Courier, monospace" font-size="39" text-anchor="end" fill="#242421" font-weight="700">$117.00</text>
+<text x="480" y="796" font-family="Courier New, Courier, monospace" font-size="27" text-anchor="middle" fill="#242421" >Payment complete</text>
+  <text x="480" y="960" font-family="Courier New, Courier, monospace" font-size="24" text-anchor="middle" fill="#242421" >Thank you. See you around.</text>
+  <text x="480" y="999" font-family="Courier New, Courier, monospace" font-size="22" text-anchor="middle" fill="#242421" >All amounts in USD</text>
+  </svg>

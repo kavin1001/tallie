@@ -1,0 +1,15 @@
+{
+  "name": "@tallie/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts.ts"
+  },
+  "dependencies": {
+    "@tallie/domain": "*",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.0"
+  }
+}

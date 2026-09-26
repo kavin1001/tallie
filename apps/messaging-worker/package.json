@@ -1,0 +1,11 @@
+{
+  "name": "@tallie/messaging-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tallie/app-services": "*",
+    "@tallie/identity": "*",
+    "@tallie/messaging": "*"
+  }
+}

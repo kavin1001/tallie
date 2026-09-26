@@ -1,0 +1,23 @@
+{
+  "name": "@tallie/receipts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts.ts",
+    "./validation": "./src/schema.ts",
+    "./media": "./src/media.ts",
+    "./jobs": "./src/jobs.ts",
+    "./storage": "./src/storage.ts",
+    "./owned": "./src/owned.ts",
+    "./draft": "./src/draft.ts"
+  },
+  "dependencies": {
+    "@tallie/db": "*",
+    "kysely": "^0.29.6",
+    "sharp": "^0.35.4",
+    "zod": "^4.1.0",
+    "@aws-sdk/client-s3": "3.1141.0"
+  }
+}

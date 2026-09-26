@@ -1,0 +1,125 @@
+import {
+  ArrowDown,
+  ArrowDownLeft,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpRight,
+  Bell,
+  CalendarDays,
+  Camera,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  Clock3,
+  Copy,
+  CreditCard,
+  Download,
+  Ellipsis,
+  ExternalLink,
+  FileImage,
+  Heart,
+  HelpCircle,
+  History,
+  Home,
+  Info,
+  Landmark,
+  Link,
+  LockKeyhole,
+  LogOut,
+  Mail,
+  MessageCircle,
+  Minus,
+  Pencil,
+  Plus,
+  Receipt,
+  Search,
+  Send,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Split,
+  Trash2,
+  Upload,
+  User,
+  UserPlus,
+  Users,
+  Wallet,
+  X,
+  type LucideProps,
+} from 'lucide-react';
+
+const icons = {
+  arrowDown: ArrowDown,
+  arrowDownLeft: ArrowDownLeft,
+  arrowLeft: ArrowLeft,
+  arrowRight: ArrowRight,
+  arrowUp: ArrowUp,
+  arrowUpRight: ArrowUpRight,
+  bell: Bell,
+  calendar: CalendarDays,
+  camera: Camera,
+  check: Check,
+  checkCheck: CheckCheck,
+  chevronDown: ChevronDown,
+  chevronLeft: ChevronLeft,
+  chevronRight: ChevronRight,
+  circleCheck: CircleCheck,
+  clock: Clock3,
+  copy: Copy,
+  creditCard: CreditCard,
+  download: Download,
+  ellipsis: Ellipsis,
+  externalLink: ExternalLink,
+  fileImage: FileImage,
+  heart: Heart,
+  help: HelpCircle,
+  history: History,
+  home: Home,
+  info: Info,
+  landmark: Landmark,
+  link: Link,
+  lock: LockKeyhole,
+  logOut: LogOut,
+  mail: Mail,
+  message: MessageCircle,
+  minus: Minus,
+  pencil: Pencil,
+  plus: Plus,
+  receipt: Receipt,
+  search: Search,
+  send: Send,
+  settings: Settings,
+  shieldCheck: ShieldCheck,
+  sparkles: Sparkles,
+  split: Split,
+  trash: Trash2,
+  upload: Upload,
+  user: User,
+  userPlus: UserPlus,
+  users: Users,
+  wallet: Wallet,
+  x: X,
+} as const;
+
+export type IconName = keyof typeof icons;
+
+export interface IconProps extends Omit<LucideProps, 'ref' | 'name'> {
+  name: IconName;
+}
+
+export function Icon({ name, size = 20, strokeWidth = 1.7, ...props }: IconProps) {
+  const IconComponent = icons[name];
+  return (
+    <IconComponent
+      aria-hidden="true"
+      focusable="false"
+      size={size}
+      strokeWidth={strokeWidth}
+      {...props}
+    />
+  );
+}

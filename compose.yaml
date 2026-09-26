@@ -1,0 +1,19 @@
+name: tallie
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tallie
+      POSTGRES_PASSWORD: tallie_local_only
+      POSTGRES_DB: tallie
+    ports:
+      - '127.0.0.1:55434:5432'
+    volumes:
+      - tallie_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tallie -d tallie']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+volumes:
+  tallie_data:

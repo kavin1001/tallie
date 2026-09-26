@@ -1,0 +1,176 @@
+# Review docs/technical/deployment.md before creating this Blueprint.
+# This file provisions paid resources when applied. Nothing is published by committing it.
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+services:
+  - type: web
+    name: tallie-web
+    runtime: docker
+    plan: 1c-2g
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node scripts/run-service.mjs web-start
+    preDeployCommand: node node_modules/tsx/dist/cli.mjs packages/db/src/migrate.ts
+    healthCheckPath: /api/status
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_MODE
+        value: beta
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: APP_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase: { name: tallie-postgres, property: connectionString }
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: IDENTITY_ENCRYPTION_KEY
+        sync: false
+      - key: MESSAGING_ENCRYPTION_KEY
+        sync: false
+      - key: SENDBLUE_API_KEY_ID
+        sync: false
+      - key: SENDBLUE_API_SECRET_KEY
+        sync: false
+      - key: SENDBLUE_VERIFY_SERVICE_SID
+        sync: false
+      - key: SENDBLUE_FROM_NUMBER
+        sync: false
+      - key: SENDBLUE_MESSAGE_WEBHOOK_SECRET
+        generateValue: true
+      - key: MESSAGING_SEND_ENABLED
+        value: 'false'
+      - key: RECEIPTS_ENABLED
+        value: 'true'
+      - key: RECEIPT_STORAGE_DRIVER
+        value: s3
+      - key: RECEIPTS_BUCKET
+        sync: false
+      - key: RECEIPTS_BUCKET_OWNER
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+  - type: worker
+    name: tallie-maintenance
+    runtime: docker
+    plan: 0.5c-512mb
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node scripts/run-service.mjs core-worker
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_MODE
+        value: beta
+      - key: DATABASE_URL
+        fromDatabase: { name: tallie-postgres, property: connectionString }
+
+  - type: worker
+    name: tallie-receipts
+    runtime: docker
+    plan: 1c-2g
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node scripts/run-service.mjs receipt-worker
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 90
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_MODE
+        value: beta
+      - key: DATABASE_URL
+        fromDatabase: { name: tallie-postgres, property: connectionString }
+      - key: RECEIPTS_ENABLED
+        value: 'true'
+      - key: RECEIPT_MODEL
+        value: gpt-4.1-mini-2025-04-14
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RECEIPT_STORAGE_DRIVER
+        value: s3
+      - key: RECEIPTS_BUCKET
+        fromService: { type: web, name: tallie-web, envVarKey: RECEIPTS_BUCKET }
+      - key: RECEIPTS_BUCKET_OWNER
+        fromService: { type: web, name: tallie-web, envVarKey: RECEIPTS_BUCKET_OWNER }
+      - key: AWS_REGION
+        fromService: { type: web, name: tallie-web, envVarKey: AWS_REGION }
+      # Separate receipt worker IAM principal: Get source, Put normalized, Delete both.
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+  - type: worker
+    name: tallie-messages
+    runtime: docker
+    plan: 0.5c-512mb
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node scripts/run-service.mjs messaging-worker
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_MODE
+        value: beta
+      - key: DATABASE_URL
+        fromDatabase: { name: tallie-postgres, property: connectionString }
+      - key: APP_ORIGIN
+        fromService: { type: web, name: tallie-web, envVarKey: APP_ORIGIN }
+      - key: IDENTITY_ENCRYPTION_KEY
+        fromService: { type: web, name: tallie-web, envVarKey: IDENTITY_ENCRYPTION_KEY }
+      - key: MESSAGING_ENCRYPTION_KEY
+        fromService: { type: web, name: tallie-web, envVarKey: MESSAGING_ENCRYPTION_KEY }
+      - key: SENDBLUE_API_KEY_ID
+        fromService: { type: web, name: tallie-web, envVarKey: SENDBLUE_API_KEY_ID }
+      - key: SENDBLUE_API_SECRET_KEY
+        fromService: { type: web, name: tallie-web, envVarKey: SENDBLUE_API_SECRET_KEY }
+      - key: SENDBLUE_FROM_NUMBER
+        fromService: { type: web, name: tallie-web, envVarKey: SENDBLUE_FROM_NUMBER }
+      - key: SENDBLUE_MESSAGE_WEBHOOK_SECRET
+        fromService: { type: web, name: tallie-web, envVarKey: SENDBLUE_MESSAGE_WEBHOOK_SECRET }
+      - key: MESSAGING_SEND_ENABLED
+        value: 'false'
+      - key: RECEIPTS_ENABLED
+        value: 'true'
+      - key: RECEIPT_STORAGE_DRIVER
+        value: s3
+      - key: RECEIPTS_BUCKET
+        fromService: { type: web, name: tallie-web, envVarKey: RECEIPTS_BUCKET }
+      - key: RECEIPTS_BUCKET_OWNER
+        fromService: { type: web, name: tallie-web, envVarKey: RECEIPTS_BUCKET_OWNER }
+      - key: AWS_REGION
+        fromService: { type: web, name: tallie-web, envVarKey: AWS_REGION }
+      # Separate messaging worker IAM principal: Put source only.
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+databases:
+  - name: tallie-postgres
+    plan: 0.5c-1g
+    region: virginia
+    postgresMajorVersion: '17'
+    databaseName: tallie
+    user: tallie
+    diskSizeGB: 5
+    ipAllowList: []
+
+previews:
+  generation: off

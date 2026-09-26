@@ -1,0 +1,55 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadFreeAccountPlan",
+      "Effect": "Allow",
+      "Action": "freetier:GetAccountPlanState",
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreatePreviewBucketInNorthernVirginia",
+      "Effect": "Allow",
+      "Action": "s3:CreateBucket",
+      "Resource": "arn:aws:s3:::tallie-preview-*",
+      "Condition": {
+        "StringEquals": { "aws:RequestedRegion": "us-east-1" },
+        "Null": { "s3:LocationConstraint": "true" },
+        "Bool": { "aws:SecureTransport": "true" }
+      }
+    },
+    {
+      "Sid": "InspectOwnedPreviewBucketConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::tallie-preview-*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1",
+          "s3:ResourceAccount": "${aws:PrincipalAccount}"
+        },
+        "Bool": { "aws:SecureTransport": "true" }
+      }
+    },
+    {
+      "Sid": "ConfigureOwnedPreviewBucketExpiration",
+      "Effect": "Allow",
+      "Action": "s3:PutLifecycleConfiguration",
+      "Resource": "arn:aws:s3:::tallie-preview-*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1",
+          "s3:ResourceAccount": "${aws:PrincipalAccount}"
+        },
+        "Bool": { "aws:SecureTransport": "true" }
+      }
+    }
+  ]
+}

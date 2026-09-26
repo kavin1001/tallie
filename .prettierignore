@@ -1,0 +1,8 @@
+node_modules
+.next
+package-lock.json
+docs/technical/validation
+docs/technical/verification
+*.svg
+
+next-env.d.ts
