@@ -222,7 +222,9 @@ Use three distinct stages:
 
 Each stage must preserve the exact draft/request and return to the next meaningful action. An interrupted verification flow resumes; it never sends someone to an empty home screen.
 
-The product may coordinate Natural account creation as part of onboarding. It must still present required customer disclosures and consent, and use the onboarding surface Natural supports. Do not ask for an SSN, bank credentials, or identity documents in Messages.
+The [published Natural individual verification flow](https://docs.natural.com/guides/overview/compliance) asks for legal name, birth date, SSN or ITIN, residential address, citizenship, employment status/job title, annual income, and separately verified email and phone. Natural may request an identity document or hold the account for review. Tallie phone verification and the synthetic sandbox account do not satisfy this production check. Explain this step before it starts; preserve the draft if Natural needs more time.
+
+The [documented Connect flow](https://docs.natural.com/guides/connect/invite-customer) takes a new customer to Natural to create and verify an account, choose a wallet, and approve the agent’s requested access, then can redirect back to Tallie. A fully embedded or prefilled identity flow is not publicly documented and requires Natural confirmation. The product must present required customer disclosures and consent on the approved surface. Do not ask for an SSN, bank credentials, or identity documents in Messages. [Bank linking](https://docs.natural.com/guides/concepts/external-accounts) is a separate step when the selected funding or withdrawal path requires it.
 
 ### 7.2 Chat-first sender
 
