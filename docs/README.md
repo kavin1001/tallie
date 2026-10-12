@@ -30,7 +30,7 @@ Start with the [product requirements](payments-prd.md), then the [living technic
 
 ## Keeping this live
 
-**October 11 repository update:** the founder authorized uploading all code and explicitly chose to keep `kavin1001/tallie` public. Development work is being published on `codex/natural-sandbox`; this supersedes earlier local-only push restrictions. Production deployment remains subject to local testing and explicit release approval. Historical verification and release notes below retain their original scope.
+**October 11 repository update:** the founder authorized uploading all code and explicitly chose to keep `kavin1001/tallie` public. Development work is published on [`codex/natural-sandbox`](https://github.com/kavin1001/tallie/tree/codex/natural-sandbox); this supersedes earlier local-only push restrictions. Production deployment remains subject to local testing and explicit release approval. Historical verification and release notes below retain their original scope.
 
 The founder requested temporary phone-only signup/sign-in for the manual-split preview (ADR-026). This is scoped to marked demo accounts and does not weaken existing passkey identities or enable money movement. See the identity and deployment guides for configuration, transition and **314-test** verification. Hosted release status is recorded in the tracker.
 
