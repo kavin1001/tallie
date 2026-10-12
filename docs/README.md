@@ -17,6 +17,7 @@ Start with the [product requirements](payments-prd.md), then the [living technic
 | [Private receipt storage](technical/deployment-storage.md)              | S3 object layout, per-service permissions, retention, and live storage checks                                   |
 | [Provider setup](technical/provider-setup.md)                           | Exact accounts, credentials and integration gates for the founder                                               |
 | [Implementation tracker](technical/implementation-tracker.md)           | Actual build progress and next vertical slice                                                                   |
+| [Repository security](../SECURITY.md)                                   | Private vulnerability reporting, local secret handling and publication boundaries                              |
 | [Payment operations](technical/payment-operations.md) | Worker, pause/status tools, production connection setup and remaining live gates |
 | [Local personal payment test](technical/local-owner-payment.md) | One bounded real-wallet send using an existing Natural owner account |
 | [Local HTTPS connection test](technical/local-production-connect.md) | Isolated production-account setup, temporary hostname, launcher and teardown |

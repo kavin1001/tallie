@@ -1,0 +1,36 @@
+# Reviewed October 11, 2026 using Gitleaks 8.30.1 against all reachable history.
+# Exact historical findings only. New findings still require review.
+# Do not replace these fingerprints with whole-file or whole-directory exclusions.
+
+# Synthetic deterministic test idempotency key.
+0c577b3364e51c2a24646c7c0e2f89717cc5031b:apps/web/src/server/payments/send-gateway.test.ts:generic-api-key:22
+
+# Synthetic deterministic test idempotency key.
+0c577b3364e51c2a24646c7c0e2f89717cc5031b:packages/natural/src/owner-pilot.test.ts:generic-api-key:21
+
+# Explicit test-only Better Auth fixture.
+12da4b205765496ef553a0949c4772c0e21e8a4d:packages/identity/src/identity.integration.test.ts:generic-api-key:699
+
+# Explicit test-only Better Auth fixture.
+94a224083edd1701889e0ba5a20f54bef77362bc:packages/identity/src/identity.integration.test.ts:generic-api-key:880
+
+# Explicit test-only Better Auth fixture.
+94a224083edd1701889e0ba5a20f54bef77362bc:packages/identity/src/identity.integration.test.ts:generic-api-key:949
+
+# Explicit test-only Better Auth fixture.
+94a224083edd1701889e0ba5a20f54bef77362bc:packages/identity/src/identity.integration.test.ts:generic-api-key:988
+
+# Explicit test-only Better Auth fixture.
+94a224083edd1701889e0ba5a20f54bef77362bc:packages/identity/src/identity.integration.test.ts:generic-api-key:1034
+
+# Synthetic deterministic test idempotency key.
+4fbc4fc059bd8d49b850152d8d4e2ac3b59b7ae6:packages/natural/src/client.test.ts:generic-api-key:23
+
+# Browser sessionStorage key name, not a token.
+3a9ef38104187201a2c3b094ee8d1c62f4178984:apps/web/src/components/account-app.tsx:generic-api-key:18
+
+# Synthetic deterministic test idempotency key.
+3a9ef38104187201a2c3b094ee8d1c62f4178984:apps/web/src/server/http.test.ts:generic-api-key:53
+
+# Explicit test-only Better Auth fixture.
+3a9ef38104187201a2c3b094ee8d1c62f4178984:packages/identity/src/identity.integration.test.ts:generic-api-key:645
