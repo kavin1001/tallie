@@ -48,11 +48,17 @@ export function NewSplit({
   showExample = true,
   initialReceiptId,
   initialDraft,
+  sandboxPaymentsAvailable = false,
 }: {
   data: Pick<Dashboard, 'user' | 'people' | 'capabilities'>;
   onClose: () => void;
   onCreated?: (expense: ExpenseSummary) => Promise<void>;
-  onSubmit?: (input: CreateExpenseInput, key: string) => Promise<void>;
+  onSubmit?: (
+    input: CreateExpenseInput,
+    key: string,
+    paymentEnvironment: 'manual' | 'sandbox',
+  ) => Promise<void>;
+  sandboxPaymentsAvailable?: boolean;
   receiptEndpoint?: string;
   showExample?: boolean;
   initialReceiptId?: string;
@@ -83,7 +89,12 @@ export function NewSplit({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
-  const attempt = useRef<{ key: string; payload: CreateExpenseInput } | null>(null);
+  const [testSplit, setTestSplit] = useState(false);
+  const attempt = useRef<{
+    key: string;
+    payload: CreateExpenseInput;
+    paymentEnvironment: 'manual' | 'sandbox';
+  } | null>(null);
   const submitLock = useRef(false);
   const participants = data.people.filter((person) => selected.includes(person.id));
   const preview = useMemo((): { allocations: readonly Allocation[]; error: string } => {
@@ -263,9 +274,18 @@ export function NewSplit({
           payload.tipMinor = cents(tip);
           payload.discountMinor = cents(discount);
         }
-        attempt.current = { key: crypto.randomUUID(), payload };
+        attempt.current = {
+          key: crypto.randomUUID(),
+          payload,
+          paymentEnvironment: sandboxPaymentsAvailable && testSplit ? 'sandbox' : 'manual',
+        };
       }
-      if (onSubmit) await onSubmit(attempt.current.payload, attempt.current.key);
+      if (onSubmit)
+        await onSubmit(
+          attempt.current.payload,
+          attempt.current.key,
+          attempt.current.paymentEnvironment,
+        );
       else {
         const expense = await api<ExpenseSummary>(
           '/api/expenses',
@@ -328,7 +348,9 @@ export function NewSplit({
             >
               {uncertain
                 ? 'Retry safely'
-                : `Send ${totalRequests} ${totalRequests === 1 ? 'request' : 'requests'}`}
+                : testSplit && sandboxPaymentsAvailable
+                  ? `Create ${totalRequests} test ${totalRequests === 1 ? 'request' : 'requests'}`
+                  : `Send ${totalRequests} ${totalRequests === 1 ? 'request' : 'requests'}`}
               <ArrowRight size={16} />
             </Button>
           )}
@@ -641,6 +663,22 @@ export function NewSplit({
                   );
                 })}
               </section>
+            )}
+            {method && sandboxPaymentsAvailable && (
+              <label className={`account-test-split-option ${testSplit ? 'selected' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={testSplit}
+                  onChange={(event) => setTestSplit(event.target.checked)}
+                />
+                <span>
+                  <strong>Make this a test split</strong>
+                  <small>
+                    Try settling up with test dollars. This stays separate from what you really owe.
+                  </small>
+                </span>
+                <span className="account-test-badge">SANDBOX</span>
+              </label>
             )}
             {preview.error && (
               <p className="form-hint" role="status">

@@ -4,7 +4,11 @@ import {
   NaturalProvisioningClient,
 } from '@tallie/natural';
 import { SandboxGatewayError, type SandboxOnboardingGateway } from '@tallie/payments';
-import { SANDBOX_PERMISSIONS, type SandboxPaymentsConfiguration } from './configuration';
+import {
+  SANDBOX_PERMISSIONS,
+  SANDBOX_SEND_PERMISSIONS,
+  type SandboxPaymentsConfiguration,
+} from './configuration';
 
 type Provisioning = Pick<
   NaturalProvisioningClient,
@@ -19,7 +23,9 @@ export function createSandboxGateway(
     provisioning: new NaturalProvisioningClient(config.provisioning),
     agent: new NaturalAgentClient(config.agent),
   },
+  profile: 'read' | 'send' = 'read',
 ): SandboxOnboardingGateway {
+  const permissions = profile === 'send' ? SANDBOX_SEND_PERMISSIONS : SANDBOX_PERMISSIONS;
   let checked: Promise<void> | undefined;
   const preflight = () =>
     (checked ??= (async () => {
@@ -65,13 +71,13 @@ export function createSandboxGateway(
       invoke(() => {
         if (
           input.agentId !== config.agent.agentId ||
-          input.permissions.length !== SANDBOX_PERMISSIONS.length ||
-          !SANDBOX_PERMISSIONS.every((permission) => input.permissions.includes(permission))
+          input.permissions.length !== permissions.length ||
+          !permissions.every((permission) => input.permissions.includes(permission))
         )
           throw new SandboxGatewayError('SANDBOX_CONFIGURATION_MISMATCH', 'rejected');
         return clients.provisioning.createSandboxInvitation({
           agentId: config.agent.agentId,
-          permissions: [...SANDBOX_PERMISSIONS],
+          permissions: [...permissions],
           operation: { instanceId: input.operationId, idempotencyKey: input.idempotencyKey },
         });
       }),

@@ -19,3 +19,15 @@ export interface SandboxAccountState {
     updatedAt: string;
   } | null;
 }
+
+export interface ProductionConnectionState {
+  available: boolean;
+  environment: 'production';
+  moneyMovementEnabled: false;
+  connection: {
+    status: 'inviting' | 'pending' | 'verifying' | 'connected' | 'unknown' | 'blocked' | 'expired';
+    invitationUrl: string | null;
+    invitationExpiresAt: string | null;
+  } | null;
+}
+export type { OwnerPilotPayment, OwnerPilotState } from './owner-pilot-contracts';

@@ -26,7 +26,7 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   );
 }
 
-/** Administrative credentials can provision test identities but expose no money commands. */
+/** Administrative credentials only provision identities and simulate test funding. */
 export class NaturalProvisioningClient {
   readonly #transport: SandboxTransport;
   constructor(config: NaturalProvisioningConfig, options: NaturalClientOptions = {}) {
@@ -93,6 +93,35 @@ export class NaturalProvisioningClient {
     );
     return result;
   }
+  /** Sandbox simulation only. This method cannot address Natural's production origin. */
+  async fundSandboxCustomer(value: c.FundSandboxCustomerInput): Promise<c.NaturalSandboxDeposit> {
+    const data = input(c.fundSandboxCustomerInput, value);
+    const ownParty = await this.getOwnParty();
+    if (data.customerPartyId === ownParty.id)
+      throw new NaturalProviderError('invalid_input', 'not_submitted');
+    const customer = await this.getCustomer(data.customerPartyId);
+    bound(customer.delegation.status === 'ACTIVE');
+    // Customer wallet reads require the customer's bound agent credential.
+    // The application gateway validates that wallet before calling this party-key
+    // simulation; the response below must still bind to the exact customer/wallet.
+    const result = await this.#transport.request(
+      `/simulations/customers/${data.customerPartyId}/transfers/deposit`,
+      c.sandboxDepositResponse,
+      {
+        operation: data.operation,
+        attributes: { amount: data.amount, currency: data.currency, walletId: data.walletId },
+      },
+    );
+    bound(
+      result.partyId === data.customerPartyId &&
+        result.walletId === data.walletId &&
+        result.amount === data.amount &&
+        result.currency === data.currency &&
+        result.type === 'deposit',
+      true,
+    );
+    return result;
+  }
 }
 
 /** Customer money paths always use a sandbox agent key and explicit non-platform actor. */
@@ -155,6 +184,24 @@ export class NaturalAgentClient {
     );
     bound(wallet.id === data.walletId && wallet.partyId === id);
     return wallet;
+  }
+  /** Canonical read only; a balance change never proves that a deposit completed. */
+  async getDeposit(value: c.GetDepositInput): Promise<c.NaturalSandboxDeposit> {
+    const data = input(c.depositReadInput, value);
+    const customer = this.#customer(data.customerPartyId);
+    const result = await this.#transport.request(
+      `/transfers/${data.transferId}?customerPartyId=${customer}`,
+      c.sandboxDepositResponse,
+    );
+    bound(
+      result.id === data.transferId &&
+        result.partyId === customer &&
+        result.walletId === data.walletId &&
+        result.amount === data.amount &&
+        result.currency === 'USD' &&
+        result.type === 'deposit',
+    );
+    return result;
   }
   async listExternalAccounts(value: {
     customerPartyId: string;
@@ -299,6 +346,96 @@ export class NaturalAgentClient {
         payment.senderAgentId === this.#agentId,
       mutation,
     );
+  }
+  #directPaymentBound(
+    payment: c.NaturalPayment,
+    expected: c.NaturalDirectPaymentBinding,
+    mutation: boolean,
+  ): void {
+    bound(
+      payment.senderPartyId === expected.senderPartyId &&
+        payment.recipientPartyId === expected.recipientPartyId &&
+        payment.paymentRequestId === null &&
+        payment.amount === expected.amount &&
+        payment.currency === expected.currency &&
+        payment.senderAgentId === this.#agentId,
+      mutation,
+    );
+  }
+  /** Direct wallet payment to a known Natural party, with explicit customer delegation. */
+  async createDirectWalletPayment(
+    value: c.CreateDirectWalletPaymentInput,
+  ): Promise<c.NaturalPayment> {
+    const data = input(c.createDirectWalletPaymentInput, value);
+    const actor = this.#customer(data.customerPartyId);
+    const recipient = this.#customer(data.recipientPartyId);
+    if (actor === recipient) throw new NaturalProviderError('invalid_input', 'not_submitted');
+    const customer = await this.getCustomer(actor);
+    bound(
+      customer.delegation.status === 'ACTIVE' &&
+        customer.delegation.permissions.includes('payments.create') &&
+        customer.agents.some(
+          (agent) =>
+            agent.id === this.#agentId &&
+            agent.status === 'ACTIVE' &&
+            agent.permissions.includes('payments.create'),
+        ),
+    );
+    const wallet = await this.getWallet({ customerPartyId: actor, walletId: data.walletId });
+    bound(wallet.status === 'active' && wallet.walletType === 'standard');
+    // The payment response has no source-wallet relationship. The exact source is
+    // selected in the immutable POST body after the ownership precheck above.
+    const result = await this.#transport.request('/payments', c.paymentResponse, {
+      operation: data.operation,
+      attributes: {
+        customerPartyId: actor,
+        walletId: data.walletId,
+        amount: data.amount,
+        currency: data.currency,
+        counterparty: { type: 'party_id', value: recipient },
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        tags: { app_operation_id: data.operation.instanceId },
+      },
+    });
+    this.#directPaymentBound(
+      result,
+      {
+        senderPartyId: actor,
+        recipientPartyId: recipient,
+        amount: data.amount,
+        currency: data.currency,
+      },
+      true,
+    );
+    bound(result.tags.app_operation_id === data.operation.instanceId, true);
+    return result;
+  }
+  /** Sent payments only; callers must paginate before concluding an operation is absent. */
+  async listPayments(value: c.ListPaymentsInput): Promise<c.NaturalPaymentPage> {
+    const data = input(c.listPaymentsInput, value);
+    const actor = this.#customer(data.customerPartyId);
+    const params = new URLSearchParams({ customerPartyId: actor });
+    if (data.cursor) params.set('cursor', data.cursor);
+    if (data.limit) params.set('limit', String(data.limit));
+    const result = await this.#transport.request(`/payments?${params}`, c.paymentsResponse);
+    bound(
+      result.payments.every((payment) => payment.senderPartyId === actor) &&
+        new Set(result.payments.map((payment) => payment.id)).size === result.payments.length,
+    );
+    return result;
+  }
+  async getDirectPayment(value: c.GetDirectPaymentInput): Promise<c.NaturalPayment> {
+    const data = input(c.directPaymentReadInput, value);
+    const actor = this.#customer(data.customerPartyId);
+    if (actor !== data.expected.senderPartyId && actor !== data.expected.recipientPartyId)
+      throw new NaturalProviderError('invalid_input', 'not_submitted');
+    const result = await this.#transport.request(
+      `/payments/${data.paymentId}?customerPartyId=${actor}`,
+      c.paymentResponse,
+    );
+    this.#directPaymentBound(result, data.expected, false);
+    bound(result.id === data.paymentId);
+    return result;
   }
   async fulfillPaymentRequest(value: c.FulfillPaymentRequestInput): Promise<c.NaturalPayment> {
     const data = input(c.fulfillRequestInput, value);

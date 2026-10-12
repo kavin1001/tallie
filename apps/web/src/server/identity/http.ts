@@ -1,10 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  IdentityError,
-  browserTokenFromHeaders,
-  SIGNUP_COOKIE,
-  opaqueToken,
-} from '@tallie/identity';
+import { IdentityError, browserTokenFromHeaders, cookieNames, opaqueToken } from '@tallie/identity';
 import { assertMutationOrigin, jsonResponse, readJson } from '../http';
 import { AppError } from '../errors';
 export { jsonResponse, readJson };
@@ -56,13 +51,14 @@ export function requireBrowser(request: Request): string {
   return token;
 }
 export function signupBrowser(request: Request): { token: string; headers: Headers } {
-  const previous = browserTokenFromHeaders(request.headers),
+  const origin = process.env.APP_ORIGIN;
+  const previous = browserTokenFromHeaders(request.headers, origin),
     token = previous ?? opaqueToken();
   const headers = new Headers();
   if (!previous)
     headers.set(
       'Set-Cookie',
-      `${SIGNUP_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${process.env.APP_ORIGIN?.startsWith('https:') ? '; Secure' : ''}`,
+      `${cookieNames(origin).signup}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${origin?.startsWith('https:') ? '; Secure' : ''}`,
     );
   return { token, headers };
 }

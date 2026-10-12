@@ -22,7 +22,7 @@ export {
   recoveryDigest,
 } from './crypto';
 export { SignupService } from './signup';
-export { phoneDemoEnabled } from './config';
+export { cookieNames, phoneDemoEnabled } from './config';
 export { IdentityError } from './errors';
 export type {
   AccountPrincipal,

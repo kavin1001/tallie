@@ -1,0 +1,102 @@
+.payments-connect {
+  display: flex;
+  gap: 19px;
+  margin-top: 28px;
+  padding: 27px;
+  border: 1px solid #dddace;
+  border-radius: 22px;
+  background: linear-gradient(115deg, #f6f3e8, #fdfbf6);
+}
+.payments-connect-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 47px;
+  height: 47px;
+  border: 1px solid #dbdcc6;
+  border-radius: 50%;
+  background: #eef0de;
+  color: #5b704b;
+}
+.payments-connect-copy {
+  min-width: 0;
+}
+.payments-connect-eyebrow {
+  color: #6d7362;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.payments-connect h2 {
+  margin: 9px 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(27px, 3vw, 34px);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+.payments-connect-copy > p {
+  max-width: 460px;
+  color: #626c5c;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.payments-connect-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px 16px;
+  margin-top: 19px;
+}
+.payments-connect-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 17px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  text-decoration: none;
+}
+.payments-connect-actions > * {
+  max-width: 100%;
+  white-space: normal;
+}
+.payments-connect small {
+  display: block;
+  margin-top: 17px;
+  color: #6d7362;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.payments-connect-copy > .payments-connect-error {
+  margin-top: 15px;
+  color: #8e4430;
+  overflow-wrap: anywhere;
+}
+.payments-connect-copy > .payments-connect-feedback {
+  margin: 15px 0 0;
+  color: #526346;
+}
+.payments-connect-feedback:empty {
+  margin: 0;
+}
+@media (max-width: 560px) {
+  .payments-connect {
+    padding: 21px 18px;
+    gap: 12px;
+    border-radius: 17px;
+  }
+  .payments-connect-icon {
+    flex-basis: 33px;
+    height: 33px;
+    margin-top: 3px;
+  }
+  .payments-connect-icon svg {
+    width: 18px;
+  }
+  .payments-connect-actions {
+    margin-left: -45px;
+  }
+}

@@ -17,7 +17,7 @@ export class NaturalProviderError extends Error {
     public readonly outcome: NaturalOutcome,
     public readonly status: number | null = null,
   ) {
-    super(`Natural sandbox ${reason.replaceAll('_', ' ')}.`);
+    super(`Natural ${reason.replaceAll('_', ' ')}.`);
     this.name = 'NaturalProviderError';
   }
 }

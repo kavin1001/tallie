@@ -178,6 +178,98 @@ describe('free preview runtime boundaries', () => {
     expect(Object.keys(disabled).filter((key) => key.startsWith('NATURAL_'))).toEqual([]);
   });
 
+  it('grants an explicitly enabled reconciler only sandbox agent reads, never provisioning or other services', () => {
+    const config = {
+      ...configuration,
+      NATURAL_RECONCILIATION_ENABLED: 'true',
+      NATURAL_ENVIRONMENT: 'sandbox',
+      NATURAL_AGENT_KEY: 'ak_ntl_sandbox_fixture',
+      NATURAL_AGENT_ID: `agt_${'a'.repeat(32)}`,
+      NATURAL_PLATFORM_PARTY_ID: `pty_${'b'.repeat(32)}`,
+      NATURAL_PRODUCTION_API_KEY: 'sk_ntl_prod_never_forward',
+      NATURAL_PRODUCTION_AGENT_KEY: 'ak_ntl_prod_never_forward',
+    };
+    const runtime = serviceConfiguration('core-worker', config, {
+      ...platform,
+      ...config,
+    }).environment;
+    expect(runtime.NATURAL_RECONCILIATION_ENABLED).toBe('true');
+    expect(runtime.NATURAL_AGENT_KEY).toBe(config.NATURAL_AGENT_KEY);
+    for (const forbidden of [
+      'NATURAL_API_KEY',
+      'NATURAL_PRODUCTION_API_KEY',
+      'NATURAL_PRODUCTION_AGENT_KEY',
+      'SENDBLUE_API_SECRET_KEY',
+      'OPENAI_API_KEY',
+    ])
+      expect(runtime).not.toHaveProperty(forbidden);
+    expect(
+      serviceConfiguration('receipt-worker', config, { ...platform, ...config }).environment,
+    ).not.toHaveProperty('NATURAL_AGENT_KEY');
+    for (const patch of [
+      { NATURAL_ENVIRONMENT: 'production' },
+      { NATURAL_AGENT_KEY: 'ak_ntl_prod_rejected' },
+      { NATURAL_AGENT_ID: '' },
+    ])
+      expect(() =>
+        serviceConfiguration('core-worker', { ...config, ...patch }, platform),
+      ).toThrow();
+  });
+
+  it('isolates production connection roles and gives only web the ingress signing secret', () => {
+    const production = {
+      ...configuration,
+      APP_ORIGIN: 'https://tallie.example',
+      NATURAL_PRODUCTION_CONNECT_ENABLED: 'true',
+      NATURAL_PRODUCTION_CONNECT_LIMIT_MINOR: '1000',
+      NATURAL_PRODUCTION_API_KEY: 'sk_ntl_prod_fixture',
+      NATURAL_PRODUCTION_AGENT_KEY: 'ak_ntl_prod_fixture',
+      NATURAL_PRODUCTION_AGENT_ID: `agt_${'c'.repeat(32)}`,
+      NATURAL_PRODUCTION_PLATFORM_PARTY_ID: `pty_${'d'.repeat(32)}`,
+      NATURAL_PRODUCTION_WEBHOOK_ENABLED: 'true',
+      NATURAL_PRODUCTION_WEBHOOK_SECRET: 'whsec_fixture',
+      NATURAL_PRODUCTION_WEBHOOK_PREVIOUS_SECRET: 'whsec_previous_fixture',
+    };
+    const inherited = { ...platform, ...production };
+    const web = serviceConfiguration('web-start', production, inherited).environment;
+    expect(web.NATURAL_PRODUCTION_API_KEY).toBe(production.NATURAL_PRODUCTION_API_KEY);
+    expect(web.NATURAL_PRODUCTION_WEBHOOK_SECRET).toBe(
+      production.NATURAL_PRODUCTION_WEBHOOK_SECRET,
+    );
+    expect(web.NATURAL_PRODUCTION_WEBHOOK_PREVIOUS_SECRET).toBe(
+      production.NATURAL_PRODUCTION_WEBHOOK_PREVIOUS_SECRET,
+    );
+    const worker = serviceConfiguration('core-worker', production, inherited).environment;
+    expect(worker.NATURAL_PRODUCTION_CONNECT_ENABLED).toBe('true');
+    for (const forbidden of [
+      'NATURAL_PRODUCTION_WEBHOOK_SECRET',
+      'NATURAL_PRODUCTION_WEBHOOK_PREVIOUS_SECRET',
+      'NATURAL_API_KEY',
+      'IDENTITY_ENCRYPTION_KEY',
+      'SENDBLUE_API_SECRET_KEY',
+    ])
+      expect(worker).not.toHaveProperty(forbidden);
+    for (const role of ['receipt-worker', 'messaging-worker']) {
+      const other = serviceConfiguration(role, production, inherited).environment;
+      expect(Object.keys(other).filter((key) => key.startsWith('NATURAL_'))).toEqual([]);
+    }
+    expect(() => serviceConfiguration('web-preview', production, inherited)).toThrow();
+    for (const patch of [
+      { APP_ORIGIN: 'http://localhost:3000' },
+      { IDENTITY_PHONE_DEMO_ENABLED: 'true' },
+      { APP_PREVIEW_MODE: 'true' },
+      { NATURAL_SANDBOX_ENABLED: 'true' },
+      { NATURAL_PRODUCTION_API_KEY: 'sk_ntl_sandbox_wrong' },
+      { NATURAL_PRODUCTION_AGENT_KEY: '' },
+      { NATURAL_PRODUCTION_CONNECT_LIMIT_MINOR: '0' },
+      { NATURAL_PRODUCTION_CONNECT_LIMIT_MINOR: '10001' },
+      { NATURAL_PRODUCTION_WEBHOOK_ENABLED: 'false' },
+    ])
+      expect(() =>
+        serviceConfiguration('core-worker', { ...production, ...patch }, inherited),
+      ).toThrow();
+  });
+
   it('never starts serving after a failed migration and closes its database', async () => {
     const launchWeb = vi.fn(() => childProcess());
     const close = vi.fn(async () => {});

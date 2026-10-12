@@ -1,10 +1,11 @@
 'use client';
 import { useAccountApi } from '../account-context';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Check, LockKeyhole, Receipt, X } from 'lucide-react';
+import { ArrowUpRight, Check, LockKeyhole, Receipt, RefreshCw, X } from 'lucide-react';
 import type { SocialContact, SocialExpense, SocialShare } from '@tallie/social/contracts';
 import { errorMessage, money, shortDate } from '@/lib/client';
 import { Avatar, Button, Dialog } from '../ui';
+import { SharePayment, ShareReceivingSetup } from './share-payment';
 
 export function AccountExpense({
   id,
@@ -27,9 +28,12 @@ export function AccountExpense({
   const [confirm, setConfirm] = useState<string | null>(null);
   const generation = useRef(0);
   const cancelLock = useRef(false);
-  async function load() {
+  const paymentCheckLock = useRef(false);
+  const [checkingPayments, setCheckingPayments] = useState(false);
+  const loadCurrent = useRef<() => Promise<void>>(async () => undefined);
+  async function load(showProgress = true) {
     const current = ++generation.current;
-    setLoading(true);
+    if (showProgress) setLoading(true);
     setError('');
     try {
       const next = await api<SocialExpense>(`/api/social/expenses/${id}`);
@@ -40,6 +44,19 @@ export function AccountExpense({
       if (current === generation.current) setLoading(false);
     }
   }
+  loadCurrent.current = () => load(false);
+  useEffect(() => {
+    if (expense?.paymentEnvironment !== 'sandbox') return;
+    const timer = window.setInterval(() => {
+      if (
+        document.visibilityState === 'visible' &&
+        !cancelLock.current &&
+        !paymentCheckLock.current
+      )
+        void loadCurrent.current();
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [expense?.paymentEnvironment, id]);
   useEffect(() => {
     setExpense(null);
     void load();
@@ -47,6 +64,27 @@ export function AccountExpense({
       generation.current++;
     };
   }, [id]);
+  async function checkPayments() {
+    if (!expense || paymentCheckLock.current || cancelLock.current) return;
+    paymentCheckLock.current = true;
+    setCheckingPayments(true);
+    try {
+      await Promise.all(
+        expense.shares
+          .filter(
+            (share) => !['self', 'no_payment', 'canceled', 'invite_ready'].includes(share.status),
+          )
+          .map((share) => api(`/api/payments/sandbox/shares/${share.id}`)),
+      );
+      await load(false);
+      await onUpdated();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      paymentCheckLock.current = false;
+      setCheckingPayments(false);
+    }
+  }
   async function cancel(share: SocialShare) {
     if (cancelLock.current || !expense) return;
     cancelLock.current = true;
@@ -87,6 +125,11 @@ export function AccountExpense({
         </div>
       ) : expense ? (
         <div className="account-expense-detail">
+          {expense.paymentEnvironment === 'sandbox' && (
+            <span className="account-test-badge" style={{ alignSelf: 'center' }}>
+              TEST SPLIT · NO REAL MONEY
+            </span>
+          )}
           <div className="account-receipt-header">
             <span aria-hidden="true">{expense.emoji}</span>
             <p>THE WHOLE MOMENT</p>
@@ -99,11 +142,34 @@ export function AccountExpense({
                   : 'Everyone’s own share'}
             </span>
           </div>
+          {expense.paymentEnvironment === 'sandbox' && expense.isOwner && <ShareReceivingSetup />}
+          {expense.paymentEnvironment === 'sandbox' &&
+            !expense.isOwner &&
+            expense.shares
+              .filter(
+                (share) =>
+                  share.isYou && !['self', 'no_payment', 'canceled'].includes(share.status),
+              )
+              .map((share) => (
+                <SharePayment
+                  key={share.id}
+                  shareId={share.id}
+                  payeeName={expense.paidByName}
+                  title={expense.title}
+                  onChanged={async () => {
+                    await load(false);
+                    await onUpdated();
+                  }}
+                />
+              ))}
           <div className="account-shares">
             {expense.shares.map((share) => {
               const contact = contacts.find((person) => person.id === share.participantId);
               const canCancel =
-                expense.isOwner && !['self', 'no_payment', 'canceled'].includes(share.status);
+                expense.isOwner &&
+                !['self', 'no_payment', 'canceled'].includes(share.status) &&
+                (expense.paymentEnvironment !== 'sandbox' ||
+                  share.sandboxPayment?.canCancel === true);
               return (
                 <div className="account-share" key={share.id}>
                   <div className="account-share-main">
@@ -122,7 +188,18 @@ export function AccountExpense({
                               ? 'Request canceled'
                               : share.status === 'invite_ready'
                                 ? 'Invitation ready'
-                                : 'Saved · payment setup pending'}
+                                : expense.paymentEnvironment === 'sandbox'
+                                  ? share.sandboxPayment?.status === 'paid'
+                                    ? 'Test share paid'
+                                    : share.sandboxPayment?.status === 'returned'
+                                      ? 'Test payment returned · share open'
+                                      : share.sandboxPayment?.status === 'failed'
+                                        ? 'Test payment failed · share open'
+                                        : share.sandboxPayment?.status === 'processing' ||
+                                            share.sandboxPayment?.status === 'unknown'
+                                          ? 'Checking test payment'
+                                          : 'Test share to cover'
+                                  : 'Saved · payment setup pending'}
                       </small>
                     </div>
                     <b>{money(share.amountMinor)}</b>
@@ -175,6 +252,18 @@ export function AccountExpense({
               );
             })}
           </div>
+          {expense.paymentEnvironment === 'sandbox' && expense.isOwner && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RefreshCw size={14} />}
+              loading={checkingPayments}
+              disabled={canceling !== null}
+              onClick={() => void checkPayments()}
+            >
+              Check test repayments
+            </Button>
+          )}
           {expense.items.length > 0 && (
             <details className="account-item-details">
               <summary>
@@ -218,9 +307,15 @@ export function AccountExpense({
           <div className="account-saved-note">
             <Check size={17} />
             <div>
-              <strong>Every share is saved.</strong>
+              <strong>
+                {expense.paymentEnvironment === 'sandbox'
+                  ? 'A practice run, together.'
+                  : 'Every share is saved.'}
+              </strong>
               <p>
-                Payments will open after our payment partner is ready. Nothing has been charged.
+                {expense.paymentEnvironment === 'sandbox'
+                  ? 'Each friend can approve their exact share using test dollars. This split stays separate from real balances.'
+                  : 'Payments will open after our payment partner is ready. Nothing has been charged.'}
               </p>
             </div>
           </div>

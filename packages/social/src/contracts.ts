@@ -18,6 +18,11 @@ export interface SocialShare {
   amountMinor: string;
   isYou: boolean;
   status: 'self' | 'no_payment' | 'invite_ready' | 'payment_setup_pending' | 'canceled';
+  /** Test settlement is a separate projection; it can never settle a manual expense. */
+  sandboxPayment?: {
+    status: 'unpaid' | 'processing' | 'unknown' | 'paid' | 'failed' | 'returned';
+    canCancel: boolean;
+  };
 }
 
 export interface SocialExpense {
@@ -37,11 +42,15 @@ export interface SocialExpense {
   tipMinor: string;
   discountMinor: string;
   createdAt: string;
+  paymentEnvironment: 'manual' | 'sandbox';
   /** Every real obligation remains blocked while Natural is unavailable. */
   paymentsEnabled: false;
 }
 
-export type CreateSocialExpense = CreateExpenseInput;
+export type CreateSocialExpense = CreateExpenseInput & {
+  /** Explicit opt-in on new expenses only. Existing obligations stay manual. */
+  paymentEnvironment?: 'manual' | 'sandbox' | undefined;
+};
 
 export interface SocialDashboard {
   userId: string;
@@ -49,8 +58,9 @@ export interface SocialDashboard {
   contacts: SocialContact[];
   expenses: SocialExpense[];
   summary: { owedToYouMinor: string; owingMinor: string };
+  sandboxSummary: { owedToYouMinor: string; owingMinor: string };
   paymentsEnabled: false;
-  capabilities: { receiptUpload: boolean };
+  capabilities: { receiptUpload: boolean; sandboxPayments: boolean };
 }
 
 export interface SocialInvitation {

@@ -25,6 +25,8 @@ import { NewSplit } from './new-split';
 import { AddFriend, InvitationSheet, type InviteContext } from './account/friends';
 import { AccountExpense } from './account/expense';
 import { PaymentsSandbox } from './account/payments-sandbox';
+import { PaymentsConnect } from './account/payments-connect';
+import { OwnerPilot } from './account/owner-pilot';
 import './account-home.css';
 
 type Page = 'home' | 'people' | 'activity';
@@ -49,6 +51,9 @@ export function AccountHome({
   onMessages,
   messagingAvailable = false,
   sandboxPaymentsAvailable = false,
+  productionConnectionAvailable = false,
+  ownerPilotAvailable = false,
+  paymentReturnState,
   initialExpenseId,
   initialReceiptId,
   initialMessageDraft,
@@ -59,6 +64,9 @@ export function AccountHome({
   onMessages: () => void;
   messagingAvailable?: boolean;
   sandboxPaymentsAvailable?: boolean;
+  productionConnectionAvailable?: boolean;
+  ownerPilotAvailable?: boolean;
+  paymentReturnState?: string;
   initialExpenseId?: string;
   initialReceiptId?: string;
   initialMessageDraft?: MessageDraft;
@@ -100,7 +108,7 @@ export function AccountHome({
     } finally {
       if (mounted.current && current === sequence.current) setLoading(false);
     }
-  }, [account]);
+  }, [account, api]);
   useEffect(() => {
     mounted.current = true;
     void refresh().catch(() => undefined);
@@ -151,6 +159,16 @@ export function AccountHome({
       },
     };
   }, [account, data]);
+  const hasTestSplits = Boolean(
+    data?.expenses.some((expense) => expense.paymentEnvironment === 'sandbox'),
+  );
+  useEffect(() => {
+    if (!hasTestSplits) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refresh().catch(() => undefined);
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [hasTestSplits, refresh]);
   const filteredContacts = (data?.contacts ?? []).filter((contact) =>
     `${contact.label} ${contact.maskedPhone}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -347,10 +365,31 @@ export function AccountHome({
                     </article>
                   </div>
                   <p className="account-payment-note">
-                    <span aria-hidden="true">✳</span> Splits are saved. Payments will open once our
-                    payment partner is ready.
+                    <span aria-hidden="true">✳</span>{' '}
+                    {ownerPilotAvailable
+                      ? 'Splits are saved. The personal payment test is separate below.'
+                      : 'Splits are saved. Payments are coming soon.'}
                   </p>
+                  {data.capabilities.sandboxPayments && data.sandboxSummary && (
+                    <div className="account-test-summary" aria-label="Test split balances">
+                      <span className="account-test-badge">TEST SPLITS</span>
+                      <p>
+                        <strong>{money(data.sandboxSummary.owingMinor)}</strong> to try paying
+                      </p>
+                      <p>
+                        <strong>{money(data.sandboxSummary.owedToYouMinor)}</strong> coming your way
+                      </p>
+                      <small>Test dollars · separate from your real shares</small>
+                    </div>
+                  )}
                   {sandboxPaymentsAvailable && <PaymentsSandbox />}
+                  {ownerPilotAvailable && <OwnerPilot accountId={account.id} />}
+                  {productionConnectionAvailable && (
+                    <PaymentsConnect
+                      onSecurity={onSecurity}
+                      {...(paymentReturnState ? { returnState: paymentReturnState } : {})}
+                    />
+                  )}
                   <section className="account-section">
                     <div className="account-section-heading">
                       <h2>Recent moments</h2>
@@ -560,6 +599,9 @@ export function AccountHome({
                 },
               }
             : {})}
+          sandboxPaymentsAvailable={Boolean(
+            data.capabilities.sandboxPayments && !activeMessageDraft,
+          )}
           showExample={false}
           receiptEndpoint="/api/account-receipts"
           {...(activeReceiptId ? { initialReceiptId: activeReceiptId } : {})}
@@ -568,7 +610,7 @@ export function AccountHome({
             setActiveMessageDraft(null);
             setActiveReceiptId(undefined);
           }}
-          onSubmit={async (input, key) => {
+          onSubmit={async (input, key, paymentEnvironment) => {
             const expense = activeMessageDraft
               ? {
                   id: (
@@ -579,14 +621,22 @@ export function AccountHome({
                     )
                   ).expenseId,
                 }
-              : await api<SocialExpense>('/api/social/expenses', input, key);
+              : await api<SocialExpense>(
+                  '/api/social/expenses',
+                  { ...input, paymentEnvironment },
+                  key,
+                );
             if (!mounted.current) return;
             setSplitOpen(false);
             setActiveMessageDraft(null);
             setActiveReceiptId(undefined);
             setExpenseId(expense.id);
             await refresh().catch(() => undefined);
-            setNotice('Split saved. Every little detail, sorted.');
+            setNotice(
+              paymentEnvironment === 'sandbox'
+                ? 'Test split saved. A little practice, together.'
+                : 'Split saved. Every little detail, sorted.',
+            );
           }}
         />
       )}
@@ -682,7 +732,12 @@ function ExpenseList({
               {expense.emoji}
             </span>
             <span className="account-moment-copy">
-              <strong>{expense.title}</strong>
+              <strong>
+                {expense.title}
+                {expense.paymentEnvironment === 'sandbox' && (
+                  <span className="account-test-badge">TEST</span>
+                )}
+              </strong>
               <span>
                 {expense.isOwner ? 'You' : expense.paidByName.split(' ')[0]} paid ·{' '}
                 {shortDate(expense.createdAt)}
@@ -702,7 +757,16 @@ function ExpenseList({
                       : 'Split saved'
                     : own?.status === 'canceled'
                       ? 'Canceled'
-                      : 'Your share'}
+                      : expense.paymentEnvironment === 'sandbox'
+                        ? own?.sandboxPayment?.status === 'paid'
+                          ? 'Test share paid'
+                          : own?.sandboxPayment?.status === 'returned'
+                            ? 'Test payment returned'
+                            : own?.sandboxPayment?.status === 'processing' ||
+                                own?.sandboxPayment?.status === 'unknown'
+                              ? 'Checking test payment'
+                              : 'Your test share'
+                        : 'Your share'}
               </span>
             </span>
             <ChevronRight size={17} />

@@ -29,6 +29,7 @@ export const expenseInput = z
     totalMinor: minor.refine((value) => BigInt(value) > 0n),
     participantIds: z.array(uuid).min(2).max(20),
     method: z.enum(['equal', 'items', 'custom']),
+    paymentEnvironment: z.enum(['manual', 'sandbox']).optional(),
     shares: z
       .array(z.object({ participantId: uuid, amountMinor: minor }).strict())
       .max(20)

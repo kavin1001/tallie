@@ -23,11 +23,17 @@ export function AccountApp({
   demoAvailable = false,
   messagingAvailable = false,
   sandboxPaymentsAvailable = false,
+  productionConnectionAvailable = false,
+  ownerPilotAvailable = false,
+  paymentReturnState,
 }: {
   invitationEntry?: boolean;
   demoAvailable?: boolean;
   messagingAvailable?: boolean;
   sandboxPaymentsAvailable?: boolean;
+  productionConnectionAvailable?: boolean;
+  ownerPilotAvailable?: boolean;
+  paymentReturnState?: string;
 }) {
   return (
     <ToastProvider>
@@ -36,6 +42,9 @@ export function AccountApp({
         demoAvailable={demoAvailable}
         messagingAvailable={messagingAvailable}
         sandboxPaymentsAvailable={sandboxPaymentsAvailable}
+        productionConnectionAvailable={productionConnectionAvailable}
+        ownerPilotAvailable={ownerPilotAvailable}
+        {...(paymentReturnState ? { paymentReturnState } : {})}
       />
     </ToastProvider>
   );
@@ -46,11 +55,17 @@ function AccountContent({
   demoAvailable,
   messagingAvailable,
   sandboxPaymentsAvailable,
+  productionConnectionAvailable,
+  ownerPilotAvailable,
+  paymentReturnState,
 }: {
   invitationEntry: boolean;
   demoAvailable: boolean;
   messagingAvailable: boolean;
   sandboxPaymentsAvailable: boolean;
+  productionConnectionAvailable: boolean;
+  ownerPilotAvailable: boolean;
+  paymentReturnState?: string;
 }) {
   const [state, setState] = useState<IdentityState | null>(null);
   const [authOpen, setAuthOpen] = useState(invitationEntry);
@@ -318,6 +333,9 @@ function AccountContent({
         onSecurity={() => setSecurityOpen(true)}
         messagingAvailable={messagingAvailable}
         sandboxPaymentsAvailable={sandboxPaymentsAvailable}
+        productionConnectionAvailable={productionConnectionAvailable}
+        ownerPilotAvailable={ownerPilotAvailable}
+        {...(paymentReturnState ? { paymentReturnState } : {})}
         onMessages={() => {
           setSelectedDraftId(undefined);
           setMessagesOpen(true);

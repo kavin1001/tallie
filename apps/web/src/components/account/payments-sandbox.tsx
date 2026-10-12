@@ -7,6 +7,7 @@ import { errorMessage, money } from '@/lib/client';
 import { useAccountApi } from '../account-context';
 import { Flower } from '../brand';
 import { Button } from '../ui';
+import { SandboxSend } from './sandbox-send';
 import './payments-sandbox.css';
 
 type Action = 'read' | 'start' | 'retry' | 'refresh';
@@ -235,6 +236,7 @@ export function PaymentsSandbox() {
         )}
         <span className="payments-sandbox-footnote">No real money can move here.</span>
       </div>
+      {connected && <SandboxSend />}
       <span className="visually-hidden" role="status" aria-live="polite">
         {busy === 'read'
           ? 'Checking saved test account setup.'

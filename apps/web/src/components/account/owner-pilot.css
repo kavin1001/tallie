@@ -1,0 +1,147 @@
+.owner-pilot {
+  margin: 20px 0 28px;
+  padding: clamp(20px, 4vw, 30px);
+  background: #f4f7ef;
+  border: 1px solid #dce5d4;
+  border-radius: 24px;
+  color: #293c30;
+}
+.owner-pilot__top,
+.owner-pilot__footer,
+.owner-pilot__payment,
+.owner-pilot__review dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.owner-pilot__eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  font-weight: 650;
+}
+.owner-pilot__badge {
+  padding: 5px 9px;
+  border: 1px solid #d2ddc9;
+  border-radius: 99px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.owner-pilot__body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 24px 0;
+}
+.owner-pilot__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #e1ebd7;
+}
+.owner-pilot__body h2 {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(22px, 3vw, 29px);
+  font-weight: 500;
+  line-height: 1.15;
+  margin: 0 0 7px;
+}
+.owner-pilot__body p {
+  margin: 0;
+  color: #66705d;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.owner-pilot__payment {
+  padding: 18px 0;
+  border-top: 1px solid #dce5d4;
+  border-bottom: 1px solid #dce5d4;
+  font-size: 14px;
+}
+.owner-pilot__payment > strong {
+  font-size: 23px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.owner-pilot__footer {
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.owner-pilot__footer > span {
+  font-size: 12px;
+  color: #66705d;
+}
+.owner-pilot__note {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #66705d;
+  margin: 14px 0 0;
+}
+.owner-pilot__error {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #923c31;
+  margin: 16px 0 0;
+}
+.owner-pilot__review {
+  padding-top: 8px;
+  text-align: center;
+}
+.owner-pilot__amount {
+  font-size: clamp(48px, 10vw, 72px);
+  font-weight: 400;
+  letter-spacing: -3px;
+  line-height: 1.2;
+  margin-top: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.owner-pilot__recipient {
+  font-size: 17px;
+  color: #66705d;
+  margin: 4px 0 28px;
+}
+.owner-pilot__recipient strong {
+  color: #293c30;
+  font-weight: 550;
+}
+.owner-pilot__review dl {
+  background: #f4f7ef;
+  border-radius: 16px;
+  padding: 17px;
+  font-size: 13px;
+  text-align: left;
+}
+.owner-pilot__review dl > div + div {
+  margin-top: 14px;
+}
+.owner-pilot__review dt {
+  color: #66705d;
+}
+.owner-pilot__review dd {
+  margin: 0;
+  text-align: right;
+}
+.owner-pilot__secure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  margin: 22px 0;
+  color: #66705d;
+}
+.owner-pilot__review > .ui-button {
+  margin-top: 8px;
+}
+@media (max-width: 420px) {
+  .owner-pilot__top {
+    align-items: start;
+  }
+  .owner-pilot__eyebrow {
+    max-width: 125px;
+    line-height: 1.7;
+  }
+}

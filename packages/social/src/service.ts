@@ -11,6 +11,7 @@ import type {
   SocialDashboard,
   SocialExpense,
   SocialInvitation,
+  SocialShare,
 } from './contracts';
 import type { SocialDatabase } from './schema';
 import {
@@ -50,6 +51,7 @@ export class SocialService {
     private readonly origin: string,
     private readonly clock = () => new Date(),
     private readonly receiptUploadEnabled = false,
+    private readonly sandboxPaymentsEnabled = false,
   ) {
     const url = new URL(origin);
     if (
@@ -233,6 +235,9 @@ export class SocialService {
     authorize?: (tx: Db) => Promise<void>,
   ): Promise<SocialExpense> {
     const parsed = expenseInput.parse(input);
+    const paymentEnvironment = parsed.paymentEnvironment ?? 'manual';
+    if (paymentEnvironment === 'sandbox' && (!this.sandboxPaymentsEnabled || authorize))
+      throw new SocialError('SANDBOX_UNAVAILABLE', 'Test splits are not available here.', 503);
     const ids = parsed.participantIds;
     if (!ids.includes(actor.userId) || new Set(ids).size !== ids.length)
       throw new SocialError(
@@ -274,6 +279,13 @@ export class SocialService {
       allocations = result.allocations;
       subtotal = result.subtotalMinor;
     }
+    if (
+      paymentEnvironment === 'sandbox' &&
+      allocations.some(
+        (share) => share.participantId !== actor.userId && share.amountMinor > 10000n,
+      )
+    )
+      throw new SocialError('TEST_SHARE_LIMIT', 'Keep each friend’s test share at $100 or less.');
     return this.command(
       actor,
       'expense',
@@ -318,6 +330,7 @@ export class SocialService {
             category: parsed.category,
             total_minor: parsed.totalMinor,
             currency: 'USD',
+            payment_environment: paymentEnvironment,
             method: parsed.method,
             items: JSON.stringify(parsed.method === 'items' ? parsed.items : []),
             subtotal_minor: subtotal.toString(),
@@ -376,6 +389,20 @@ export class SocialService {
     if (expense.owner_user_id !== userId && !shares.some((share) => share.user_id === userId))
       throw notFound();
     const isOwner = expense.owner_user_id === userId;
+    const paymentStates =
+      expense.payment_environment === 'sandbox'
+        ? await sql<{
+            share_id: string;
+            status: string;
+            lease_until: Date | null;
+            provider_payment_id: string | null;
+          }>`
+            SELECT DISTINCT ON (p.share_id) p.share_id, p.status, p.lease_until, p.provider_payment_id
+            FROM natural_sandbox_sends p JOIN social_shares s ON s.id=p.share_id
+            WHERE s.expense_id=${id}::uuid
+            ORDER BY p.share_id, p.attempt_sequence DESC
+          `.execute(db)
+        : { rows: [] };
     return {
       id,
       title: expense.title,
@@ -392,6 +419,7 @@ export class SocialService {
       tipMinor: expense.tip_minor,
       discountMinor: expense.discount_minor,
       createdAt: expense.created_at.toISOString(),
+      paymentEnvironment: expense.payment_environment,
       paymentsEnabled: false,
       shares: shares.map((share) => ({
         id: share.id,
@@ -399,6 +427,14 @@ export class SocialService {
         name: isOwner ? share.private_label : (share.display_name ?? 'Invited friend'),
         amountMinor: share.amount_minor,
         isYou: share.user_id === userId,
+        ...(expense.payment_environment === 'sandbox' && !share.is_payer
+          ? {
+              sandboxPayment: this.sandboxShareProjection(
+                paymentStates.rows.find((payment) => payment.share_id === share.id),
+                share.canceled_at !== null,
+              ),
+            }
+          : {}),
         status: share.is_payer
           ? 'self'
           : share.amount_minor === '0'
@@ -410,6 +446,31 @@ export class SocialService {
                 : 'invite_ready',
       })),
     };
+  }
+
+  private sandboxShareProjection(
+    payment:
+      { status: string; lease_until: Date | null; provider_payment_id: string | null } | undefined,
+    canceled: boolean,
+  ): NonNullable<SocialShare['sandboxPayment']> {
+    const released =
+      payment?.provider_payment_id != null && ['FAILED', 'RETURNED'].includes(payment.status);
+    const status = !payment
+      ? 'unpaid'
+      : ['FAILED', 'RETURNED'].includes(payment.status) && !released
+        ? 'unknown'
+        : payment.status === 'COMPLETED'
+          ? 'paid'
+          : payment.status === 'RETURNED'
+            ? 'returned'
+            : ['FAILED', 'APPROVAL_DENIED', 'CANCELED'].includes(payment.status)
+              ? 'failed'
+              : payment.status === 'unknown' ||
+                  (payment.status === 'submitting' &&
+                    (!payment.lease_until || payment.lease_until <= this.clock()))
+                ? 'unknown'
+                : 'processing';
+    return { status, canCancel: !canceled && (!payment || released) };
   }
 
   async dashboard(actor: SocialPrincipal): Promise<SocialDashboard> {
@@ -433,21 +494,39 @@ export class SocialService {
       .orderBy('social_expenses.created_at', 'desc')
       .limit(100)
       .execute();
-    const totals = await sql<{ owed: string; owing: string }>`
-      SELECT COALESCE(SUM(CASE WHEN e.owner_user_id=${actor.userId}::uuid THEN s.amount_minor ELSE 0 END),0)::text AS owed,
-      COALESCE(SUM(CASE WHEN s.user_id=${actor.userId}::uuid THEN s.amount_minor ELSE 0 END),0)::text AS owing
+    const totals = await sql<{
+      owed: string;
+      owing: string;
+      sandbox_owed: string;
+      sandbox_owing: string;
+    }>`
+      SELECT COALESCE(SUM(CASE WHEN e.payment_environment='manual' AND e.owner_user_id=${actor.userId}::uuid THEN s.amount_minor ELSE 0 END),0)::text AS owed,
+      COALESCE(SUM(CASE WHEN e.payment_environment='manual' AND s.user_id=${actor.userId}::uuid THEN s.amount_minor ELSE 0 END),0)::text AS owing,
+      COALESCE(SUM(CASE WHEN e.payment_environment='sandbox' AND p.status IS DISTINCT FROM 'COMPLETED' AND e.owner_user_id=${actor.userId}::uuid THEN s.amount_minor ELSE 0 END),0)::text AS sandbox_owed,
+      COALESCE(SUM(CASE WHEN e.payment_environment='sandbox' AND p.status IS DISTINCT FROM 'COMPLETED' AND s.user_id=${actor.userId}::uuid THEN s.amount_minor ELSE 0 END),0)::text AS sandbox_owing
       FROM social_shares s JOIN social_expenses e ON e.id=s.expense_id
+      LEFT JOIN LATERAL (
+        SELECT status FROM natural_sandbox_sends WHERE share_id=s.id
+        ORDER BY attempt_sequence DESC LIMIT 1
+      ) p ON e.payment_environment='sandbox'
       WHERE NOT s.is_payer AND s.canceled_at IS NULL AND (e.owner_user_id=${actor.userId}::uuid OR s.user_id=${actor.userId}::uuid)
     `.execute(this.db);
     return {
       userId: actor.userId,
       displayName: actor.displayName,
-      capabilities: { receiptUpload: this.receiptUploadEnabled },
+      capabilities: {
+        receiptUpload: this.receiptUploadEnabled,
+        sandboxPayments: this.sandboxPaymentsEnabled,
+      },
       contacts: contacts.map(contactDto),
       expenses: await Promise.all(rows.map((row) => this.expense(actor.userId, row.id))),
       summary: {
         owedToYouMinor: totals.rows[0]?.owed ?? '0',
         owingMinor: totals.rows[0]?.owing ?? '0',
+      },
+      sandboxSummary: {
+        owedToYouMinor: totals.rows[0]?.sandbox_owed ?? '0',
+        owingMinor: totals.rows[0]?.sandbox_owing ?? '0',
       },
       paymentsEnabled: false,
     };
@@ -741,14 +820,31 @@ export class SocialService {
         .executeTakeFirst();
       if (!expense) throw notFound();
       const share = await tx
-        .updateTable('social_shares')
-        .set({ canceled_at: sql`COALESCE(canceled_at, ${this.clock()})` })
+        .selectFrom('social_shares')
+        .select('id')
         .where('id', '=', shareId)
         .where('expense_id', '=', expenseId)
         .where('is_payer', '=', false)
-        .returning('id')
+        .forUpdate()
         .executeTakeFirst();
       if (!share) throw notFound();
+      // Match payment confirmation's expense -> share lock order. A missing provider
+      // response never releases collection; completed payments need a return, not cancel.
+      const payment = await sql<{ id: string }>`
+        SELECT id FROM natural_sandbox_sends WHERE share_id=${shareId}::uuid
+        AND NOT (status IN ('FAILED','RETURNED') AND provider_payment_id IS NOT NULL) LIMIT 1
+      `.execute(tx);
+      if (payment.rows.length)
+        throw new SocialError(
+          'PAYMENT_IN_PROGRESS',
+          'This test request has a payment in progress or completed. Check its status before making changes.',
+          409,
+        );
+      await tx
+        .updateTable('social_shares')
+        .set({ canceled_at: sql`COALESCE(canceled_at, ${this.clock()})` })
+        .where('id', '=', shareId)
+        .execute();
       return this.expense(actor.userId, expenseId, tx);
     });
   }

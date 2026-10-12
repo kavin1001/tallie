@@ -1,10 +1,12 @@
-# Peer Payments — Product Requirements Document
+# Tallie — Product Requirements Document
 
 **Version:** 1.0 — P2P MVP, signup first with secondary Venmo repayment  
 **Date:** September 25, 2026  
 **Audience:** Founder, product designer, engineers, payment and messaging partners  
 **Platforms:** Mobile web and iMessage for the MVP; native mobile and Messages extension later  
-**Working name:** To be chosen. “The app” and “agent” are placeholders, not proposed branding.
+**Project name:** Tallie (founder-confirmed).
+
+**Current partner status (September26):** Natural P2P approval is founder-confirmed; production setup, bank funding/cash-out and live behavior remain to be verified. The engineering tracker records implementation evidence separately.
 
 **Engineering reference:** [Living technical design](payments-technical-design.md), with decision, verification, and implementation trackers.
 

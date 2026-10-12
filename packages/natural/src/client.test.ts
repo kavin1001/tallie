@@ -124,6 +124,40 @@ function payment() {
     },
   };
 }
+function directPayment() {
+  const result = payment();
+  result.data.relationships.sender = relation('party', requester);
+  result.data.relationships.recipient = relation('party', payer);
+  result.data.relationships.paymentRequest = relation('paymentRequest', null);
+  return result;
+}
+function customer(
+  permissions = ['party.read', 'wallets.read', 'wallets.balance', 'payments.create'],
+) {
+  return {
+    data: {
+      type: 'customer',
+      id: requester,
+      attributes: {
+        delegation: { id: id('dlg', 'a'), status: 'ACTIVE', permissions },
+        agents: [{ id: agentId, status: 'ACTIVE', permissions }],
+      },
+    },
+  };
+}
+function deposit() {
+  return {
+    data: {
+      type: 'transfer',
+      id: id('trf', 'a'),
+      attributes: { type: 'deposit', amount: 5000, currency: 'USD', status: 'COMPLETED' },
+      relationships: {
+        party: relation('party', requester),
+        wallet: relation('wallet', walletId),
+      },
+    },
+  };
+}
 function fakeAgent(responder: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const transport = vi.fn<typeof fetch>(async (url, init) => responder(String(url), init!));
   return { transport, client: new NaturalAgentClient(agentConfig, { fetch: transport }) };
@@ -138,6 +172,58 @@ function create(client: NaturalAgentClient) {
     operation,
   });
 }
+
+describe('canonical sandbox deposit reads', () => {
+  const read = { customerPartyId: requester, walletId, transferId: id('trf', 'a'), amount: 5000 };
+  it('uses an agent-scoped GET for the exact saved deposit without a mutation', async () => {
+    const { client, transport } = fakeAgent(() => json(deposit()));
+    expect(await client.getDeposit(read)).toMatchObject({
+      id: read.transferId,
+      status: 'COMPLETED',
+    });
+    expect(transport).toHaveBeenCalledOnce();
+    expect(transport.mock.calls[0]?.[0]).toBe(
+      `${NATURAL_SANDBOX_ORIGIN}/transfers/${read.transferId}?customerPartyId=${requester}`,
+    );
+    expect(transport.mock.calls[0]?.[1]).toMatchObject({ method: 'GET' });
+    expect(transport.mock.calls[0]?.[1]?.body).toBeUndefined();
+  });
+  it('rejects another transfer, customer, wallet, amount, currency or transfer type', async () => {
+    const mismatches = [
+      (value: ReturnType<typeof deposit>) => {
+        value.data.id = id('trf', 'b');
+      },
+      (value: ReturnType<typeof deposit>) => {
+        value.data.relationships.party = relation('party', payer);
+      },
+      (value: ReturnType<typeof deposit>) => {
+        value.data.relationships.wallet = relation('wallet', payerWalletId);
+      },
+      (value: ReturnType<typeof deposit>) => {
+        value.data.attributes.amount = 4999;
+      },
+      (value: ReturnType<typeof deposit>) => {
+        value.data.attributes.currency = 'EUR';
+      },
+      (value: ReturnType<typeof deposit>) => {
+        value.data.attributes.type = 'withdrawal';
+      },
+    ];
+    for (const change of mismatches) {
+      const body = deposit();
+      change(body);
+      const { client } = fakeAgent(() => json(body));
+      await expect(client.getDeposit(read)).rejects.toMatchObject({ outcome: 'not_submitted' });
+    }
+  });
+  it('rejects platform-as-customer before any request', async () => {
+    const { client, transport } = fakeAgent(() => json(deposit()));
+    await expect(client.getDeposit({ ...read, customerPartyId: platform })).rejects.toMatchObject({
+      reason: 'invalid_input',
+    });
+    expect(transport).not.toHaveBeenCalled();
+  });
+});
 function moneyTransport(post: () => Response | Promise<Response>) {
   return fakeAgent((url, init) => {
     if (init.method === 'POST') return post();
@@ -225,7 +311,7 @@ describe('sandbox credential and configuration boundary', () => {
       NaturalProviderError,
     );
   });
-  it('provisioning never exposes financial commands and private fields do not serialize secrets', () => {
+  it('provisioning exposes no payment commands and private fields do not serialize secrets', () => {
     const client = new NaturalProvisioningClient({ environment: 'sandbox', apiKey: partyKey });
     expect('fulfillPaymentRequest' in client).toBe(false);
     expect('createPaymentRequest' in client).toBe(false);
@@ -352,6 +438,105 @@ describe('sandbox provisioning wire contracts', () => {
       }),
     );
     expect((await client.getAgent(agentId)).partyId).toBe(platform);
+  });
+});
+
+describe('sandbox test funding', () => {
+  function fundingTransport(post: () => Response) {
+    const transport = vi.fn<typeof fetch>(async (url, init) => {
+      if (init?.method === 'POST') return post();
+      if (String(url).endsWith('/parties/me'))
+        return json({
+          data: { type: 'party', id: platform, attributes: { partyType: 'ORG', status: 'ACTIVE' } },
+        });
+      if (String(url).includes('/customers/')) return json(customer());
+      // A provisioning key cannot read a connected customer's wallet.
+      return json({ errors: [{ code: 'forbidden' }] }, 403);
+    });
+    return {
+      transport,
+      client: new NaturalProvisioningClient(
+        { environment: 'sandbox', apiKey: partyKey },
+        { fetch: transport },
+      ),
+    };
+  }
+  it('credits only the explicit connected customer wallet through the simulation endpoint', async () => {
+    const { client, transport } = fundingTransport(() => json(deposit()));
+    const result = await client.fundSandboxCustomer({
+      customerPartyId: requester,
+      walletId,
+      amount: 5000,
+      currency: 'USD',
+      operation,
+    });
+    expect(result).toMatchObject({
+      partyId: requester,
+      walletId,
+      amount: 5000,
+      status: 'COMPLETED',
+    });
+    const post = transport.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(post[0]).toBe(
+      `${NATURAL_SANDBOX_ORIGIN}/simulations/customers/${requester}/transfers/deposit`,
+    );
+    expect(post[1]!.headers).toMatchObject({
+      Authorization: `Bearer ${partyKey}`,
+      'Idempotency-Key': operation.idempotencyKey,
+      'X-Instance-ID': operation.instanceId,
+    });
+    expect(JSON.parse(post[1]!.body as string)).toEqual({
+      data: { attributes: { amount: 5000, currency: 'USD', walletId } },
+    });
+    expect(transport.mock.calls.map(([url]) => String(url))).toEqual([
+      `${NATURAL_SANDBOX_ORIGIN}/parties/me`,
+      `${NATURAL_SANDBOX_ORIGIN}/customers/${requester}`,
+      `${NATURAL_SANDBOX_ORIGIN}/simulations/customers/${requester}/transfers/deposit`,
+    ]);
+  });
+  it('rejects platform self-funding and inactive customer access before POST', async () => {
+    const { client, transport } = fundingTransport(() => json(deposit()));
+    await expect(
+      client.fundSandboxCustomer({
+        customerPartyId: platform,
+        walletId,
+        amount: 5000,
+        currency: 'USD',
+        operation,
+      }),
+    ).rejects.toMatchObject({ outcome: 'not_submitted' });
+    transport.mockResolvedValueOnce(
+      json({
+        data: { type: 'party', id: platform, attributes: { partyType: 'ORG', status: 'ACTIVE' } },
+      }),
+    );
+    const inactive = customer();
+    inactive.data.attributes.delegation.status = 'REVOKED';
+    transport.mockResolvedValueOnce(json(inactive));
+    await expect(
+      client.fundSandboxCustomer({
+        customerPartyId: requester,
+        walletId,
+        amount: 5000,
+        currency: 'USD',
+        operation,
+      }),
+    ).rejects.toMatchObject({ reason: 'binding_mismatch', outcome: 'not_submitted' });
+    expect(transport.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+  it('treats a deposit for the wrong wallet as an uncertain mutation', async () => {
+    const wrong = deposit();
+    wrong.data.relationships.wallet = relation('wallet', payerWalletId);
+    const { client } = fundingTransport(() => json(wrong));
+    await expect(
+      client.fundSandboxCustomer({
+        customerPartyId: requester,
+        walletId,
+        amount: 5000,
+        currency: 'USD',
+        operation,
+      }),
+    ).rejects.toMatchObject({ reason: 'binding_mismatch', outcome: 'unknown' });
   });
 });
 
@@ -566,6 +751,154 @@ describe('payment command identity and immutable wire binding', () => {
         })
       ).status,
     ).toBe('RETURNED');
+  });
+});
+
+describe('direct wallet payments and reconciliation reads', () => {
+  function directTransport(post: () => Response) {
+    return fakeAgent((url, init) => {
+      if (init.method === 'POST') return post();
+      if (url.includes('/customers/')) return json(customer());
+      if (url.includes('/wallets/')) return json(wallet());
+      if (url.includes('/payments/')) return json(directPayment());
+      return json({
+        data: [directPayment().data],
+        meta: { pagination: { hasMore: true, nextCursor: 'next_page' } },
+      });
+    });
+  }
+  const send = (client: NaturalAgentClient) =>
+    client.createDirectWalletPayment({
+      customerPartyId: requester,
+      walletId,
+      recipientPartyId: payer,
+      amount: 2600,
+      currency: 'USD',
+      description: 'Dinner',
+      operation,
+    });
+  it('binds the agent, payer, source wallet, party recipient, amount and operation', async () => {
+    const { client, transport } = directTransport(() => json(directPayment(), 201));
+    const result = await send(client);
+    expect(result).toMatchObject({
+      senderPartyId: requester,
+      recipientPartyId: payer,
+      amount: 2600,
+      paymentRequestId: null,
+      senderAgentId: agentId,
+    });
+    const post = transport.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(post[0]).toBe(`${NATURAL_SANDBOX_ORIGIN}/payments`);
+    expect(post[1]!.headers).toMatchObject({
+      Authorization: `Bearer ${agentKey}`,
+      'Idempotency-Key': operation.idempotencyKey,
+      'X-Instance-ID': operation.instanceId,
+    });
+    expect(JSON.parse(post[1]!.body as string)).toEqual({
+      data: {
+        attributes: {
+          customerPartyId: requester,
+          walletId,
+          amount: 2600,
+          currency: 'USD',
+          counterparty: { type: 'party_id', value: payer },
+          description: 'Dinner',
+          tags: { app_operation_id: operation.instanceId },
+        },
+      },
+    });
+  });
+  it('requires the current agent payment grant and payer-owned active wallet before POST', async () => {
+    const { client, transport } = fakeAgent((url) =>
+      json(url.includes('/customers/') ? customer(['party.read']) : wallet()),
+    );
+    await expect(send(client)).rejects.toMatchObject({
+      reason: 'binding_mismatch',
+      outcome: 'not_submitted',
+    });
+    expect(transport.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    const foreign = directTransport(() => json(directPayment()));
+    foreign.transport.mockResolvedValueOnce(json(customer()));
+    foreign.transport.mockResolvedValueOnce(json(wallet(payer)));
+    await expect(send(foreign.client)).rejects.toMatchObject({
+      reason: 'binding_mismatch',
+      outcome: 'not_submitted',
+    });
+    expect(foreign.transport.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+  it('rejects self, platform, malformed amount, and malformed recipient before any provider call', async () => {
+    const { client, transport } = directTransport(() => json(directPayment()));
+    const base = {
+      customerPartyId: requester,
+      walletId,
+      recipientPartyId: payer,
+      amount: 2600,
+      currency: 'USD' as const,
+      operation,
+    };
+    for (const patch of [
+      { recipientPartyId: requester },
+      { recipientPartyId: platform },
+      { recipientPartyId: '@sandbox.payment_recipient' },
+      { amount: 0 },
+    ]) {
+      await expect(client.createDirectWalletPayment({ ...base, ...patch })).rejects.toMatchObject({
+        outcome: 'not_submitted',
+      });
+    }
+    expect(transport).not.toHaveBeenCalled();
+  });
+  it('keeps a mismatched POST response uncertain', async () => {
+    const wrong = directPayment();
+    wrong.data.relationships.recipient = relation('party', platform);
+    const { client } = directTransport(() => json(wrong));
+    await expect(send(client)).rejects.toMatchObject({
+      reason: 'binding_mismatch',
+      outcome: 'unknown',
+    });
+  });
+  it('lists bounded sent-payment pages for operation-tag reconciliation', async () => {
+    const { client, transport } = directTransport(() => json(directPayment()));
+    const page = await client.listPayments({
+      customerPartyId: requester,
+      limit: 25,
+      cursor: 'old',
+    });
+    expect(page).toMatchObject({ hasMore: true, nextCursor: 'next_page' });
+    expect(page.payments).toHaveLength(1);
+    expect(page.payments[0]!.tags.app_operation_id).toBe(operation.instanceId);
+    expect(transport.mock.calls[0]![0]).toBe(
+      `${NATURAL_SANDBOX_ORIGIN}/payments?customerPartyId=${requester}&cursor=old&limit=25`,
+    );
+    expect(transport.mock.calls[0]![1]!.method).toBe('GET');
+  });
+  it('rejects an unrelated sender in a reconciliation page', async () => {
+    const unrelated = directPayment();
+    unrelated.data.relationships.sender = relation('party', payer);
+    const { client } = fakeAgent(() =>
+      json({
+        data: [unrelated.data],
+        meta: { pagination: { hasMore: false, nextCursor: null } },
+      }),
+    );
+    await expect(client.listPayments({ customerPartyId: requester })).rejects.toMatchObject({
+      reason: 'binding_mismatch',
+      outcome: 'not_submitted',
+    });
+  });
+  it('reads a direct payment with exact sender, recipient, and null request link', async () => {
+    const { client } = directTransport(() => json(directPayment()));
+    const payment = await client.getDirectPayment({
+      customerPartyId: requester,
+      paymentId,
+      expected: {
+        senderPartyId: requester,
+        recipientPartyId: payer,
+        amount: 2600,
+        currency: 'USD',
+      },
+    });
+    expect(payment.paymentRequestId).toBeNull();
   });
 });
 

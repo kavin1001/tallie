@@ -94,6 +94,183 @@ describe('real account social PostgreSQL invariants', () => {
     );
   }
 
+  async function testSplit() {
+    const f = await fixture();
+    const sandbox = new SocialService(db, vault, 'http://localhost:3000', () => now, false, true);
+    const input = {
+      title: 'Test coffee',
+      emoji: '☕',
+      category: 'coffee' as const,
+      totalMinor: '200',
+      participantIds: [f.owner.actor.userId, f.contact.id],
+      method: 'equal' as const,
+      paymentEnvironment: 'sandbox' as const,
+    };
+    const expense = await sandbox.createExpense(f.owner.actor, input, randomUUID());
+    const invitation = await sandbox.createInvitation(
+      f.owner.actor,
+      { contactId: f.contact.id, expenseId: expense.id },
+      randomUUID(),
+    );
+    await sandbox.claimInvitation(f.friend.actor, token(invitation));
+    return { ...f, sandbox, input, expense, shareId: expense.shares.find((s) => !s.isYou)!.id };
+  }
+
+  // Projection fixtures only: provider execution/consent is tested in the payment suite.
+  async function savedTestPayment(
+    f: Awaited<ReturnType<typeof testSplit>>,
+    status: string,
+    canonical = true,
+  ) {
+    let connection = await sql<{ id: string }>`SELECT id FROM natural_sandbox_send_connections
+      WHERE account_id=${f.friend.actor.userId}::uuid`.execute(db);
+    if (!connection.rows[0]) {
+      const id = randomUUID();
+      await sql`INSERT INTO natural_sandbox_send_connections(
+        id,account_id,environment,phone_hash,platform_party_id,agent_id,permissions,status,phase,
+        invite_operation_id,invite_idempotency_key,accept_operation_id,accept_idempotency_key
+      ) VALUES(${id}::uuid,${f.friend.actor.userId}::uuid,'sandbox',${f.friend.actor.phoneHash},
+        'pty_platform','agt_test','[]','prepared','invite',${randomUUID()}::uuid,
+        ${randomUUID()}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid)`.execute(db);
+      connection = { ...connection, rows: [{ id }] };
+    }
+    const reviewId = randomUUID();
+    await sql`INSERT INTO natural_sandbox_send_reviews(
+      id,account_id,client_request_key,phone_hash,sender_connection_id,sender_party_id,
+      sender_wallet_id,recipient_account_id,recipient_party_id,recipient_name,amount_minor,note,
+      status,expires_at,confirmed_at,share_id
+    ) VALUES(${reviewId}::uuid,${f.friend.actor.userId}::uuid,${randomUUID()}::uuid,
+      ${f.friend.actor.phoneHash},${connection.rows[0]!.id}::uuid,'pty_sender','wal_sender',
+      ${f.owner.actor.userId}::uuid,'pty_receiver','Alex',100,'','confirmed',
+      ${new Date(now.getTime() + 600000)},${now},${f.shareId}::uuid)`.execute(db);
+    const id = randomUUID();
+    await sql`INSERT INTO natural_sandbox_sends(id,review_id,account_id,operation_id,idempotency_key,
+      status,share_id,created_at,updated_at,provider_payment_id)
+      VALUES(${id}::uuid,${reviewId}::uuid,${f.friend.actor.userId}::uuid,${randomUUID()}::uuid,
+        ${randomUUID()}::uuid,${status},${f.shareId}::uuid,${now},${now},
+        ${canonical ? `pay_${randomUUID()}` : null})`.execute(db);
+    return id;
+  }
+
+  it('requires explicit enabled sandbox creation and keeps original obligations manual', async () => {
+    const f = await testSplit();
+    const manual = await split(f, '200');
+    expect(manual.paymentEnvironment).toBe('manual');
+    expect(manual.shares.every((share) => share.sandboxPayment === undefined)).toBe(true);
+    await expect(service.createExpense(f.owner.actor, f.input, randomUUID())).rejects.toMatchObject(
+      {
+        code: 'SANDBOX_UNAVAILABLE',
+      },
+    );
+    await expect(
+      f.sandbox.createExpense(f.owner.actor, { ...f.input, totalMinor: '20002' }, randomUUID()),
+    ).rejects.toMatchObject({ code: 'TEST_SHARE_LIMIT' });
+    await expect(
+      f.sandbox.createExpense(
+        f.owner.actor,
+        { ...f.input, paymentEnvironment: 'production' as 'sandbox' },
+        randomUUID(),
+      ),
+    ).rejects.toThrow();
+    const view = await f.sandbox.dashboard(f.owner.actor);
+    expect(view.summary.owedToYouMinor).toBe('100');
+    expect(view.sandboxSummary.owedToYouMinor).toBe('100');
+    expect(view.capabilities.sandboxPayments).toBe(true);
+    expect((await service.dashboard(f.owner.actor)).capabilities.sandboxPayments).toBe(false);
+    await expect(f.sandbox.expense(f.outsider.actor.userId, f.expense.id)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('projects completed test payments for both people without touching manual balances', async () => {
+    const f = await testSplit();
+    await split(f, '600');
+    await savedTestPayment(f, 'COMPLETED');
+    for (const actor of [f.owner.actor, f.friend.actor]) {
+      const expense = await f.sandbox.expense(actor.userId, f.expense.id);
+      expect(expense.shares.find((share) => share.id === f.shareId)?.sandboxPayment).toEqual({
+        status: 'paid',
+        canCancel: false,
+      });
+      expect((await f.sandbox.dashboard(actor)).sandboxSummary).toEqual({
+        owedToYouMinor: '0',
+        owingMinor: '0',
+      });
+    }
+    expect((await f.sandbox.dashboard(f.owner.actor)).summary.owedToYouMinor).toBe('300');
+    expect((await f.sandbox.dashboard(f.friend.actor)).summary.owingMinor).toBe('300');
+    await expect(
+      f.sandbox.cancelShare(f.owner.actor, f.expense.id, f.shareId),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_IN_PROGRESS',
+    });
+  });
+
+  it('restores a returned test share and uses attempt order when timestamps match', async () => {
+    const f = await testSplit();
+    const paymentId = await savedTestPayment(f, 'COMPLETED');
+    await sql`UPDATE natural_sandbox_sends SET status='RETURNED' WHERE id=${paymentId}::uuid`.execute(
+      db,
+    );
+    expect((await f.sandbox.dashboard(f.friend.actor)).sandboxSummary.owingMinor).toBe('100');
+    expect(
+      (await f.sandbox.expense(f.owner.actor.userId, f.expense.id)).shares.find(
+        (s) => s.id === f.shareId,
+      )?.sandboxPayment,
+    ).toEqual({ status: 'returned', canCancel: true });
+    await savedTestPayment(f, 'COMPLETED');
+    expect((await f.sandbox.dashboard(f.friend.actor)).sandboxSummary.owingMinor).toBe('0');
+  });
+
+  it.each([
+    'prepared',
+    'submitting',
+    'unknown',
+    'PROCESSING',
+    'IN_REVIEW',
+    'COMPLETED',
+    'CANCELED',
+    'APPROVAL_DENIED',
+  ])('does not cancel a share with a %s test payment', async (status) => {
+    const f = await testSplit();
+    await savedTestPayment(f, status);
+    await expect(
+      f.sandbox.cancelShare(f.owner.actor, f.expense.id, f.shareId),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_IN_PROGRESS',
+    });
+    expect(
+      (await f.sandbox.expense(f.owner.actor.userId, f.expense.id)).shares.find(
+        (s) => s.id === f.shareId,
+      )?.status,
+    ).not.toBe('canceled');
+  });
+
+  it.each(['FAILED', 'RETURNED'])(
+    'permits cancellation after a canonical %s test payment',
+    async (status) => {
+      const f = await testSplit();
+      await savedTestPayment(f, status);
+      await f.sandbox.cancelShare(f.owner.actor, f.expense.id, f.shareId);
+      expect((await f.sandbox.dashboard(f.friend.actor)).sandboxSummary.owingMinor).toBe('0');
+    },
+  );
+
+  it('retains an unresolved failure without canonical evidence and blocks cancellation', async () => {
+    const f = await testSplit();
+    await savedTestPayment(f, 'FAILED', false);
+    expect(
+      (await f.sandbox.expense(f.owner.actor.userId, f.expense.id)).shares.find(
+        (share) => share.id === f.shareId,
+      )?.sandboxPayment,
+    ).toEqual({ status: 'unknown', canCancel: false });
+    await expect(
+      f.sandbox.cancelShare(f.owner.actor, f.expense.id, f.shareId),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_IN_PROGRESS',
+    });
+  });
+
   it('keeps account discovery opaque, rejects self, and encrypts a contact phone', async () => {
     const f = await fixture();
     expect(f.contact.status).toBe('invitation_needed');

@@ -5,10 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./contracts": "./src/contracts.ts"
+    "./contracts": "./src/contracts.ts",
+    "./readiness": "./src/readiness.ts"
   },
   "dependencies": {
     "@tallie/identity": "*",
-    "kysely": "^0.29.6"
+    "kysely": "^0.29.6",
+    "standardwebhooks": "1.1.1"
   }
 }

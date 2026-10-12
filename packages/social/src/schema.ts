@@ -23,6 +23,7 @@ export interface SocialDatabase {
     category: Category;
     total_minor: string;
     currency: 'USD';
+    payment_environment: ColumnType<'manual' | 'sandbox', 'manual' | 'sandbox' | undefined, never>;
     method: SplitMethod;
     items: ColumnType<ExpenseItem[], string, never>;
     subtotal_minor: string;

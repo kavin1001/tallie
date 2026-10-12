@@ -2,7 +2,7 @@
 
 ## Current release gate
 
-The founder requires local testing before releasing the Natural integration. Keep Natural changes local; do not push or deploy them to production until the founder has tested locally and approved release. The existing hosted phone-demo release is separate from this work.
+The founder requires local testing before releasing the Natural integration. On October 11, 2026, the founder explicitly authorized pushing all code to `kavin1001/tallie` and confirmed the repository should remain public. Publishing the development branch is authorized; merging or deploying the Natural integration to production still requires founder local testing and explicit release approval. The existing hosted phone-demo release is separate from this work.
 
 ## Documentation
 

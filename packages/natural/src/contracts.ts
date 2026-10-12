@@ -7,6 +7,7 @@ export const externalAccountIdSchema = z.string().regex(/^eac_[0-9a-f]{32}$/);
 export const paymentRequestIdSchema = z.string().regex(/^prq_[0-9a-f]{32}$/);
 export const paymentIdSchema = z.string().regex(/^pay_[0-9a-f]{32}$/);
 export const invitationIdSchema = z.string().regex(/^adi_[0-9a-f]{32}$/);
+export const transferIdSchema = z.string().regex(/^trf_[0-9a-f]{32}$/);
 export const centsSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const signedCents = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
 const tags = z.record(z.string(), z.string());
@@ -165,6 +166,54 @@ export const acceptInput = z.strictObject({
   operation: operationSchema,
 });
 export type AcceptSandboxInvitationInput = z.infer<typeof acceptInput>;
+export const fundSandboxCustomerInput = z.strictObject({
+  customerPartyId: partyIdSchema,
+  walletId: walletIdSchema,
+  amount: centsSchema,
+  currency: z.literal('USD'),
+  operation: operationSchema,
+});
+export type FundSandboxCustomerInput = z.infer<typeof fundSandboxCustomerInput>;
+export const sandboxDepositResponse = z
+  .object({
+    data: z.object({
+      type: z.literal('transfer'),
+      id: transferIdSchema,
+      attributes: z.object({
+        type: z.literal('deposit'),
+        amount: centsSchema,
+        currency: z.literal('USD'),
+        status: z.enum([
+          'CREATED',
+          'PROCESSING',
+          'IN_REVIEW',
+          'COMPLETED',
+          'FAILED',
+          'RETURNED',
+          'APPROVAL_DENIED',
+          'CANCELED',
+        ]),
+      }),
+      relationships: z.object({
+        party: partyRelation,
+        wallet: relation('wallet', walletIdSchema),
+      }),
+    }),
+  })
+  .transform(({ data }) => ({
+    id: data.id,
+    ...data.attributes,
+    partyId: data.relationships.party.data.id,
+    walletId: data.relationships.wallet.data.id,
+  }));
+export type NaturalSandboxDeposit = z.infer<typeof sandboxDepositResponse>;
+export const depositReadInput = z.strictObject({
+  customerPartyId: partyIdSchema,
+  walletId: walletIdSchema,
+  transferId: transferIdSchema,
+  amount: centsSchema,
+});
+export type GetDepositInput = z.infer<typeof depositReadInput>;
 
 export const paginationSchema = z
   .object({ hasMore: z.boolean(), nextCursor: z.string().nullable() })
@@ -338,44 +387,53 @@ export const fulfillRequestInput = requestReadInput.extend({
 });
 export type FulfillPaymentRequestInput = z.infer<typeof fulfillRequestInput>;
 
-export const paymentResponse = z
+export const createDirectWalletPaymentInput = z.strictObject({
+  customerPartyId: partyIdSchema,
+  walletId: walletIdSchema,
+  recipientPartyId: partyIdSchema,
+  amount: centsSchema,
+  currency: z.literal('USD'),
+  description: z.string().max(80).optional(),
+  operation: operationSchema,
+});
+export type CreateDirectWalletPaymentInput = z.infer<typeof createDirectWalletPaymentInput>;
+
+const paymentResource = z
   .object({
-    data: z.object({
-      type: z.literal('payment'),
-      id: paymentIdSchema,
-      attributes: z.object({
-        amount: centsSchema,
-        currency: z.literal('USD'),
-        status: z.enum([
-          'CREATED',
-          'PROCESSING',
-          'PENDING_CLAIM',
-          'IN_REVIEW',
-          'COMPLETED',
-          'FAILED',
-          'RETURNED',
-          'APPROVAL_DENIED',
-          'CANCELED',
-        ]),
-        tags,
-        fee: z
-          .object({
-            amount: centsSchema,
-            currency: z.literal('USD'),
-            payer: z.literal('sender'),
-            applied: z.literal('on_top'),
-          })
-          .nullable(),
-      }),
-      relationships: z.object({
-        sender: nullableParty,
-        recipient: nullableParty,
-        senderAgent: nullableAgent,
-        paymentRequest: nullableRelation('paymentRequest', paymentRequestIdSchema),
-      }),
+    type: z.literal('payment'),
+    id: paymentIdSchema,
+    attributes: z.object({
+      amount: centsSchema,
+      currency: z.literal('USD'),
+      status: z.enum([
+        'CREATED',
+        'PROCESSING',
+        'PENDING_CLAIM',
+        'IN_REVIEW',
+        'COMPLETED',
+        'FAILED',
+        'RETURNED',
+        'APPROVAL_DENIED',
+        'CANCELED',
+      ]),
+      tags,
+      fee: z
+        .object({
+          amount: centsSchema,
+          currency: z.literal('USD'),
+          payer: z.literal('sender'),
+          applied: z.literal('on_top'),
+        })
+        .nullable(),
+    }),
+    relationships: z.object({
+      sender: nullableParty,
+      recipient: nullableParty,
+      senderAgent: nullableAgent,
+      paymentRequest: nullableRelation('paymentRequest', paymentRequestIdSchema),
     }),
   })
-  .transform(({ data }) => ({
+  .transform((data) => ({
     id: data.id,
     ...data.attributes,
     senderPartyId: data.relationships.sender.data?.id ?? null,
@@ -383,7 +441,31 @@ export const paymentResponse = z
     senderAgentId: data.relationships.senderAgent.data?.id ?? null,
     paymentRequestId: data.relationships.paymentRequest.data?.id ?? null,
   }));
+export const paymentResponse = z.object({ data: paymentResource }).transform(({ data }) => data);
 export type NaturalPayment = z.infer<typeof paymentResponse>;
+export const paymentsResponse = z
+  .object({ data: z.array(paymentResource), meta: z.object({ pagination: paginationSchema }) })
+  .transform(({ data, meta }) => ({ payments: data, ...meta.pagination }));
+export type NaturalPaymentPage = z.infer<typeof paymentsResponse>;
+export const listPaymentsInput = z.strictObject({
+  customerPartyId: partyIdSchema,
+  cursor: z.string().min(1).max(1024).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+export type ListPaymentsInput = z.infer<typeof listPaymentsInput>;
+export const directPaymentBindingSchema = z.strictObject({
+  senderPartyId: partyIdSchema,
+  recipientPartyId: partyIdSchema,
+  amount: centsSchema,
+  currency: z.literal('USD'),
+});
+export type NaturalDirectPaymentBinding = z.infer<typeof directPaymentBindingSchema>;
+export const directPaymentReadInput = z.strictObject({
+  customerPartyId: partyIdSchema,
+  paymentId: paymentIdSchema,
+  expected: directPaymentBindingSchema,
+});
+export type GetDirectPaymentInput = z.infer<typeof directPaymentReadInput>;
 export const paymentBindingSchema = z.strictObject({
   senderPartyId: partyIdSchema,
   recipientPartyId: partyIdSchema,

@@ -72,7 +72,7 @@ export function serviceConfiguration(service, config, platform = process.env) {
   );
   const allowed = ['DATABASE_URL', 'APP_MODE'];
   if (service.startsWith('web-') && config.NATURAL_SANDBOX_ENABLED === 'true') {
-    // Explicit sandbox-only exception for synthetic onboarding. No payment worker is enabled.
+    // Explicit sandbox-only exception for synthetic onboarding and approval.
     const provisioning = config.NATURAL_PROVISIONING_API_KEY || config.NATURAL_API_KEY;
     if (
       !['beta', 'demo'].includes(config.APP_MODE) ||
@@ -96,6 +96,83 @@ export function serviceConfiguration(service, config, platform = process.env) {
       'NATURAL_AGENT_KEY',
       'NATURAL_AGENT_ID',
       'NATURAL_PLATFORM_PARTY_ID',
+    );
+  }
+  if (service === 'core-worker' && config.NATURAL_RECONCILIATION_ENABLED === 'true') {
+    if (
+      !['beta', 'demo'].includes(config.APP_MODE) ||
+      config.NATURAL_ENVIRONMENT !== 'sandbox' ||
+      !/^ak_ntl_sandbox_[A-Za-z0-9_-]{1,512}$/.test(config.NATURAL_AGENT_KEY ?? '') ||
+      !/^agt_[0-9a-f]{32}$/.test(config.NATURAL_AGENT_ID ?? '') ||
+      !/^pty_[0-9a-f]{32}$/.test(config.NATURAL_PLATFORM_PARTY_ID ?? '') ||
+      (config.NATURAL_API_BASE_URL &&
+        config.NATURAL_API_BASE_URL !== 'https://api.sandbox.natural.com')
+    )
+      throw new Error('Payment reconciliation requires complete sandbox agent configuration.');
+    allowed.push(
+      'NATURAL_RECONCILIATION_ENABLED',
+      'NATURAL_ENVIRONMENT',
+      'NATURAL_AGENT_KEY',
+      'NATURAL_AGENT_ID',
+      'NATURAL_PLATFORM_PARTY_ID',
+      'NATURAL_SANDBOX_WEBHOOK_ENABLED',
+    );
+  }
+  if (service.startsWith('web-')) {
+    for (const naturalEnvironment of ['sandbox', 'production']) {
+      const prefix = `NATURAL_${naturalEnvironment.toUpperCase()}_WEBHOOK_`;
+      if (config[`${prefix}ENABLED`] !== 'true') continue;
+      if (naturalEnvironment === 'production' && preview)
+        throw new Error('Production webhooks require the dedicated beta runtime.');
+      const identityPrefix = naturalEnvironment === 'sandbox' ? 'NATURAL_' : 'NATURAL_PRODUCTION_';
+      if (
+        !/^agt_[0-9a-f]{32}$/.test(config[`${identityPrefix}AGENT_ID`] ?? '') ||
+        !/^pty_[0-9a-f]{32}$/.test(config[`${identityPrefix}PLATFORM_PARTY_ID`] ?? '') ||
+        !config[`${prefix}SECRET`] ||
+        (naturalEnvironment === 'sandbox' && config.NATURAL_ENVIRONMENT !== 'sandbox')
+      )
+        throw new Error('Natural webhook identities and signing secret are required.');
+      allowed.push(
+        `${prefix}ENABLED`,
+        `${prefix}SECRET`,
+        `${prefix}PREVIOUS_SECRET`,
+        `${identityPrefix}AGENT_ID`,
+        `${identityPrefix}PLATFORM_PARTY_ID`,
+      );
+      if (naturalEnvironment === 'sandbox') allowed.push('NATURAL_ENVIRONMENT');
+    }
+  }
+  if (
+    (service.startsWith('web-') || service === 'core-worker') &&
+    config.NATURAL_PRODUCTION_CONNECT_ENABLED === 'true'
+  ) {
+    const origin = appOrigin(config, platform);
+    if (
+      preview ||
+      config.APP_MODE !== 'beta' ||
+      config.APP_PREVIEW_MODE === 'true' ||
+      config.IDENTITY_PHONE_DEMO_ENABLED === 'true' ||
+      config.NATURAL_SANDBOX_ENABLED === 'true' ||
+      !origin?.startsWith('https://') ||
+      !/^sk_ntl_prod_[A-Za-z0-9_-]{1,512}$/.test(config.NATURAL_PRODUCTION_API_KEY ?? '') ||
+      !/^ak_ntl_prod_[A-Za-z0-9_-]{1,512}$/.test(config.NATURAL_PRODUCTION_AGENT_KEY ?? '') ||
+      !/^agt_[0-9a-f]{32}$/.test(config.NATURAL_PRODUCTION_AGENT_ID ?? '') ||
+      !/^pty_[0-9a-f]{32}$/.test(config.NATURAL_PRODUCTION_PLATFORM_PARTY_ID ?? '') ||
+      !/^[1-9][0-9]{0,4}$/.test(config.NATURAL_PRODUCTION_CONNECT_LIMIT_MINOR ?? '') ||
+      Number(config.NATURAL_PRODUCTION_CONNECT_LIMIT_MINOR) > 10000 ||
+      config.NATURAL_PRODUCTION_WEBHOOK_ENABLED !== 'true'
+    )
+      throw new Error(
+        'Production account connection requires complete dedicated beta configuration.',
+      );
+    allowed.push(
+      'NATURAL_PRODUCTION_CONNECT_ENABLED',
+      'NATURAL_PRODUCTION_CONNECT_LIMIT_MINOR',
+      'NATURAL_PRODUCTION_API_KEY',
+      'NATURAL_PRODUCTION_AGENT_KEY',
+      'NATURAL_PRODUCTION_AGENT_ID',
+      'NATURAL_PRODUCTION_PLATFORM_PARTY_ID',
+      'NATURAL_PRODUCTION_WEBHOOK_ENABLED',
     );
   }
   if (service.startsWith('web-') || service === 'messaging-worker')

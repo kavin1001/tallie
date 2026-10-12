@@ -1,0 +1,30 @@
+-- Separate synthetic customer and delegation for sandbox payment testing.
+-- A row is setup evidence only; payment approval and execution require other records.
+CREATE TABLE natural_sandbox_send_connections (
+  id uuid PRIMARY KEY,
+  account_id uuid NOT NULL UNIQUE REFERENCES auth_user(id),
+  environment text NOT NULL CHECK(environment='sandbox'),
+  phone_hash text NOT NULL,
+  platform_party_id text NOT NULL,
+  agent_id text NOT NULL,
+  permissions jsonb NOT NULL CHECK(jsonb_typeof(permissions)='array'),
+  status text NOT NULL CHECK(status IN ('prepared','inviting','accepting','verifying','connected','unknown','blocked')),
+  phase text NOT NULL CHECK(phase IN ('invite','accept','verify','balances')),
+  invite_operation_id uuid NOT NULL UNIQUE,
+  invite_idempotency_key uuid NOT NULL UNIQUE,
+  accept_operation_id uuid NOT NULL UNIQUE,
+  accept_idempotency_key uuid NOT NULL UNIQUE,
+  invitation_id text UNIQUE,
+  customer_party_id text UNIQUE,
+  delegation_id text,
+  balances jsonb NOT NULL DEFAULT '[]'::jsonb CHECK(jsonb_typeof(balances)='array'),
+  first_submission_at timestamptz,
+  lease_until timestamptz,
+  generation integer NOT NULL DEFAULT 0 CHECK(generation>=0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK(customer_party_id IS DISTINCT FROM platform_party_id),
+  CHECK((invitation_id IS NULL)=(customer_party_id IS NULL)),
+  CHECK(status<>'connected' OR (customer_party_id IS NOT NULL AND delegation_id IS NOT NULL)),
+  CHECK(phase='invite' OR invitation_id IS NOT NULL)
+);

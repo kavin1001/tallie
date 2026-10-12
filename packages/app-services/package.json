@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./payments": "./src/payments.ts",
+    "./production-payments": "./src/production-payments.ts",
+    "./owner-pilot": "./src/owner-pilot.ts"
   },
   "dependencies": {
     "@tallie/channels": "*",
@@ -13,6 +16,8 @@
     "@tallie/messaging": "*",
     "@tallie/receipts": "*",
     "@tallie/social": "*",
-    "kysely": "^0.29.6"
+    "kysely": "^0.29.6",
+    "@tallie/natural": "*",
+    "@tallie/payments": "*"
   }
 }

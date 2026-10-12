@@ -16,17 +16,21 @@ import { identityVault } from './crypto';
 import { IdentityError } from './errors';
 import { SignupService } from './signup';
 import type { AccountPrincipal, IdentityAccount } from './contracts';
-import { phoneDemoEnabled } from './config';
+import { cookieNames, phoneDemoEnabled } from './config';
 
 export const SIGNUP_COOKIE = 'tallie_signup';
 const onboardingEnrollmentWindowMs = 10 * 60_000;
-export function browserTokenFromHeaders(headers: Headers): string | null {
+export function browserTokenFromHeaders(
+  headers: Headers,
+  origin = process.env.APP_ORIGIN,
+): string | null {
+  const name = cookieNames(origin).signup;
   const cookie = headers
     .get('cookie')
     ?.split(';')
     .map((part) => part.trim())
-    .find((part) => part.startsWith(`${SIGNUP_COOKIE}=`))
-    ?.slice(SIGNUP_COOKIE.length + 1);
+    .find((part) => part.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
   return cookie && /^[A-Za-z0-9_-]{43}$/.test(cookie) ? cookie : null;
 }
 export function identityAvailable(): boolean {
@@ -119,6 +123,7 @@ export function createIdentityAuth(config: {
     )
   )
     throw new Error('Identity origin must be a fixed HTTPS origin (or local development).');
+  const cookies = cookieNames(config.origin);
   const verifiedRegistrations = new WeakSet<object>();
   const bridge = {
     id: 'tallie-reverse-otp',
@@ -152,7 +157,7 @@ export function createIdentityAuth(config: {
           ]),
         },
         async (ctx) => {
-          const token = ctx.headers ? browserTokenFromHeaders(ctx.headers) : null;
+          const token = ctx.headers ? browserTokenFromHeaders(ctx.headers, config.origin) : null;
           if (!token)
             throw new APIError('UNAUTHORIZED', {
               code: 'SIGNUP_SESSION_REQUIRED',
@@ -265,7 +270,7 @@ export function createIdentityAuth(config: {
       fields: { expiresAt: 'expires_at', createdAt: 'created_at', updatedAt: 'updated_at' },
     },
     advanced: {
-      cookiePrefix: 'tallie_identity',
+      cookiePrefix: cookies.prefix,
       database: { generateId: () => randomUUID() },
       useSecureCookies: origin.protocol === 'https:',
       defaultCookieAttributes: { httpOnly: true, sameSite: 'lax', path: '/' },
@@ -379,7 +384,7 @@ export function createIdentityAuth(config: {
         rpID: origin.hostname,
         rpName: 'Tallie',
         origin: config.origin,
-        advanced: { webAuthnChallengeCookie: 'tallie_identity.passkey_challenge' },
+        advanced: { webAuthnChallengeCookie: cookies.passkeyChallenge },
         authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
         registration: {
           requireSession: true,

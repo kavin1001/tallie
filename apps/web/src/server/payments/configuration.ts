@@ -8,11 +8,19 @@ import {
 } from '@tallie/natural';
 import { AppError } from '../errors';
 
-// This milestone only provisions synthetic identities and reads test balances.
+// The original account remains deliberately read-only. Sending creates a separate
+// synthetic customer with its own explicit, payment-capable delegation.
 export const SANDBOX_PERMISSIONS = [
   'party.read',
   'wallets.read',
   'wallets.balance',
+] as const satisfies readonly NaturalPermission[];
+export const SANDBOX_SEND_PERMISSIONS = [
+  'party.read',
+  'wallets.read',
+  'wallets.balance',
+  'payments.read',
+  'payments.create',
 ] as const satisfies readonly NaturalPermission[];
 export interface SandboxPaymentsConfiguration {
   provisioning: NaturalProvisioningConfig;
