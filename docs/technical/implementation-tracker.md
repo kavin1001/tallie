@@ -1,13 +1,21 @@
 # Implementation tracker
 
 **Updated:** September 26, 2026  
-**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `12da4b2` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
+**Current phase:** Free account/manual-split preview live at [tallie-web.onrender.com](https://tallie-web.onrender.com), deployed from `94a2240` in private [kavin1001/tallie](https://github.com/kavin1001/tallie). Live HTTPS/session/access checks pass; native phone/passkey and two-person invitation tests remain next.
 
 **Provider status:** Sendblue phone proof worked in the earlier development test. OpenAI synthetic receipt extraction passed earlier live checks. Natural sandbox and consumer-P2P acceptance remain pending. The free hosted preview disables receipt processing and messaging, retaining Sendblue Verify for signup.
 
-**Current deployment constraint:** $0 infrastructure budget. Free Render web/PostgreSQL deployed; paid worker topology remains inactive. Public DB access is blocked. The web sleeps after inactivity and the database expires October 26, 2026, with no backups. AWS storage is deferred because account-specific free-plan coverage was not confirmed. No credential values belong in these notes.
+**Current deployment constraint:** $0 infrastructure budget. Free Render web/PostgreSQL deployed; paid worker topology remains inactive. Public DB access is blocked. The web sleeps after inactivity and the replacement database `tallie-postgres-2` expires December 1, 2026, with no backups. AWS storage is deferred because account-specific free-plan coverage was not confirmed. No credential values belong in these notes.
 
 Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented`, `Verified in sandbox`, `Verified in pilot`. A working mock is not a completed live integration.
+
+## November 1 database replacement
+
+- The original free `tallie-postgres` expired October 26, 2026 and Render suspended it for billing; the web service crash-looped on startup (`Preview startup failed…`) because its database was unreachable. All earlier preview accounts were lost with it.
+- Created free PostgreSQL 17 `tallie-postgres-2` (Virginia, `dpg-dbjq4bgae00c73evs6d0-a`, empty IP allow list so public traffic is blocked; expires **December 1, 2026**). The founder set `tallie-web`'s `DATABASE_URL` to its internal URL in the dashboard; no credential values are recorded here.
+- Saving the env var alone did not create a new deploy; the running instance kept the old URL. Manual API deploy `dep-dbjqgkjbc2fs73djed70` of `94a2240` applied all 12 migrations to the empty database, logged `Preview ready to start`, and Render reported it live at https://tallie-web.onrender.com. Database logs confirm the app user, identity and maintenance pools connecting. Evidence level: Render deploy/app/database logs only; no HTTP check or signup from this session (sandbox network blocks the host).
+- `render.yaml` still names `tallie-postgres` via `fromDatabase`; re-syncing the Blueprint would point the service back at the expired database. Update the Blueprint or delete the old database before any Blueprint sync.
+- **Next concrete action:** founder signs up on the live preview to confirm end to end; before December 1, decide whether to recreate again or move to a paid database.
 
 ## September 26 hosted free-preview milestone
 
