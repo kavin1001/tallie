@@ -13,7 +13,7 @@ Start with the [product requirements](payments-prd.md), then the [living technic
 | [Social integration](technical/social-integration.md)                   | Private contacts, intended-recipient invitations, shared expenses, cancellation, and authorization              |
 | [Messages integration](technical/messaging-integration.md)              | Durable iMessage/SMS drafts, consent, receipt intake, publication, and delivery uncertainty                     |
 | [Sendblue development integration](technical/sendblue-integration.md)   | Earlier isolated phone-proof test; no account or payment authority                                              |
-| [Deployment guide](technical/deployment.md)                             | Live free preview, release evidence, resource limits, retained paid topology and remaining device checks       |
+| [Deployment guide](technical/deployment.md)                             | Live free preview, release evidence, resource limits, retained paid topology and remaining device checks        |
 | [Private receipt storage](technical/deployment-storage.md)              | S3 object layout, per-service permissions, retention, and live storage checks                                   |
 | [Provider setup](technical/provider-setup.md)                           | Exact accounts, credentials and integration gates for the founder                                               |
 | [Implementation tracker](technical/implementation-tracker.md)           | Actual build progress and next vertical slice                                                                   |

@@ -52,25 +52,25 @@ Status values: `Not started`, `In progress`, `Blocked on evidence`, `Implemented
 
 The table below records the original implementation baseline; dated milestones later in this document supersede those original statuses.
 
-| Workstream | Status | Requirements / dependencies | Completion evidence to add |
-|---|---|---|---|
-| Living technical design and ADRs | Design complete | PRD scope | Initial design and decision log |
-| Design model + PostgreSQL experiments | Passed locally | INV-01 through relevant modeled invariants | [Validation guide](validation/README.md) |
-| Natural public schema audit/checker | Passed public checks | G-001–G-009 remain runtime gates | [Checker](verification/README.md) |
-| Provider/access spikes | Not started | Founder access; G-001–G-014 | Sandbox fixtures, device observations, partner references |
-| Repository/runtime/CI/deploy foundation | Local implementation complete; CI configured, hosting pending | ADR-001–004, ADR-017 | Lockfile, build, migration pipeline, role tests |
-| Auth/session assurance/guest scope | Isolated demo sessions implemented; real auth pending | ONB/ID/PRIV; G-010–011, G-019 | Signup, recovery, access-denial tests |
-| Expenses/calculations/revisions | Equal/custom/item publishing implemented; revisions pending | SPL/REV/P2P; INV-01/03/07 | Actual domain property and integration tests |
-| Durable operations/inbox/outbox | Local operations + simulator implemented; provider inbox/outbox pending | PAY-01/02; INV-02–08 | Real migration/worker crash/concurrency tests |
-| Receipt ingestion/AI/redaction | Not started | SPL-01, PRIV-02; G-015–016 | Evaluation report, isolation/privacy checks |
-| Request creation/fulfillment/Natural activation | Not started | REQ/PAY; G-001–009 | End-to-end sandbox request and payment |
-| Direct sends/deposit/withdraw | Simulated direct sends implemented; live flows pending | PAY-04/06/07 | Exact-source approval, insufficient balance and recovery fixtures |
-| Corrections/returns/support issues | Issue pause + cancellation implemented; corrections/returns pending | REV/OPS; G-004–005 | Cancel race, residual accounting, returned-payment UX |
-| Venmo handoff/external confirmation | Not started | EXT-01–04; G-014 | Devices, lane switches, guest-later-signup, manual provenance |
-| iMessage/Verify/SMS notifications | Not started | MSG-01–03; G-009, G-012–013 | Real device, consent, duplicates/unknown delivery |
-| Mobile web/accessibility | Local browser flows verified; full accessibility/performance audit pending | UX/A11Y; G-020 | [Observed flows](implementation-verification.md), responsive and keyboard checks |
-| Observability/support/restore | Not started | OPS; G-017–018 | Dashboards, runbooks, audited repair tools, timed restore |
-| Free private beta | Not started | All applicable live gates passed | Named operator, cohort, measured costs/repeat use |
+| Workstream                                      | Status                                                                     | Requirements / dependencies                | Completion evidence to add                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| Living technical design and ADRs                | Design complete                                                            | PRD scope                                  | Initial design and decision log                                                  |
+| Design model + PostgreSQL experiments           | Passed locally                                                             | INV-01 through relevant modeled invariants | [Validation guide](validation/README.md)                                         |
+| Natural public schema audit/checker             | Passed public checks                                                       | G-001–G-009 remain runtime gates           | [Checker](verification/README.md)                                                |
+| Provider/access spikes                          | Not started                                                                | Founder access; G-001–G-014                | Sandbox fixtures, device observations, partner references                        |
+| Repository/runtime/CI/deploy foundation         | Local implementation complete; CI configured, hosting pending              | ADR-001–004, ADR-017                       | Lockfile, build, migration pipeline, role tests                                  |
+| Auth/session assurance/guest scope              | Isolated demo sessions implemented; real auth pending                      | ONB/ID/PRIV; G-010–011, G-019              | Signup, recovery, access-denial tests                                            |
+| Expenses/calculations/revisions                 | Equal/custom/item publishing implemented; revisions pending                | SPL/REV/P2P; INV-01/03/07                  | Actual domain property and integration tests                                     |
+| Durable operations/inbox/outbox                 | Local operations + simulator implemented; provider inbox/outbox pending    | PAY-01/02; INV-02–08                       | Real migration/worker crash/concurrency tests                                    |
+| Receipt ingestion/AI/redaction                  | Not started                                                                | SPL-01, PRIV-02; G-015–016                 | Evaluation report, isolation/privacy checks                                      |
+| Request creation/fulfillment/Natural activation | Not started                                                                | REQ/PAY; G-001–009                         | End-to-end sandbox request and payment                                           |
+| Direct sends/deposit/withdraw                   | Simulated direct sends implemented; live flows pending                     | PAY-04/06/07                               | Exact-source approval, insufficient balance and recovery fixtures                |
+| Corrections/returns/support issues              | Issue pause + cancellation implemented; corrections/returns pending        | REV/OPS; G-004–005                         | Cancel race, residual accounting, returned-payment UX                            |
+| Venmo handoff/external confirmation             | Not started                                                                | EXT-01–04; G-014                           | Devices, lane switches, guest-later-signup, manual provenance                    |
+| iMessage/Verify/SMS notifications               | Not started                                                                | MSG-01–03; G-009, G-012–013                | Real device, consent, duplicates/unknown delivery                                |
+| Mobile web/accessibility                        | Local browser flows verified; full accessibility/performance audit pending | UX/A11Y; G-020                             | [Observed flows](implementation-verification.md), responsive and keyboard checks |
+| Observability/support/restore                   | Not started                                                                | OPS; G-017–018                             | Dashboards, runbooks, audited repair tools, timed restore                        |
+| Free private beta                               | Not started                                                                | All applicable live gates passed           | Named operator, cohort, measured costs/repeat use                                |
 
 ## First implementation slice
 
@@ -97,7 +97,6 @@ Next action:
 ```
 
 Update this tracker as work is implemented. Add commit/PR/test references rather than changing a row to Done based on a screenshot or successful happy-path mock.
-
 
 ## September 25 implementation milestone — Tallie
 
